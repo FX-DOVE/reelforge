@@ -89,8 +89,8 @@ export function YtIntelPage() {
 export function YtProjectPanel({ projectId, seed, yt }: { projectId: string; seed: string; yt?: { reportId: string; title: string; description: string; tags: string[]; hashtags: string[] } }) {
   const [rid, setRid] = useState<string | null>(yt?.reportId || null); const [open, setOpen] = useState(false); const r = useReport(open ? rid : null);
   const run = async () => { const x = await fetch("/api/ytintel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: seed.slice(0, 120), projectId }) }); const j = await x.json(); if (j.id) { setRid(j.id); setOpen(true); } };
-  return <div className="panel p-3">
-    <div className="flex items-center gap-2 text-sm"><BarChart3 className="h-4 w-4 text-red-500" /><b className="text-white">YouTube Intelligence</b>
+  return <div className="panel min-w-0 p-3">
+    <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm"><BarChart3 className="h-4 w-4 text-red-500" /><b className="text-white">YouTube Intelligence</b>
       <span className="truncate text-ink-400">{yt ? `Title: ${yt.title}` : "Titles, description, tags & thumbnails from top competitors"}</span>
       <div className="ml-auto flex gap-1">{rid && <button className="btn-ghost h-8 text-xs" onClick={() => setOpen(!open)}>{open ? "Hide" : "View report"}</button>}<button className="btn-outline h-8 text-xs" onClick={run} disabled={!seed.trim()}><Sparkles className="h-3.5 w-3.5" />{yt ? "Re-run" : "Auto-fill"}</button></div></div>
     {yt && !open && <div className="mt-2 flex flex-wrap gap-1">{[...yt.hashtags, ...yt.tags.slice(0, 8)].map((t) => <span key={t} className="chip h-6 text-[11px]">{t}</span>)}</div>}

@@ -65,6 +65,8 @@ export function ScriptTab({ p, act, busy, toast, setP, openBrainstorm, next }: T
     <>
       <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
         <section className="flex min-w-0 flex-1 flex-col px-3 py-4 sm:px-6 sm:py-6">
+          {/* stacked above the editor (collapsed by default) so it never steals width from the script or the brainstorm panel */}
+          <div className="mx-auto mb-3 w-full min-w-0 max-w-4xl"><YtProjectPanel projectId={p.id} seed={p.idea?.split("\n")[0] || p.title} yt={p.yt} /></div>
           <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center gap-2">
             <div className="flex rounded-xl border border-white/10 p-0.5">
               <button onClick={() => setView("write")} className={`btn h-8 ${view === "write" ? "bg-white/10 text-white" : "text-ink-400"}`}><PenLine className="h-3.5 w-3.5" />Write</button>
@@ -109,7 +111,6 @@ export function ScriptTab({ p, act, busy, toast, setP, openBrainstorm, next }: T
           </div>
         </section>
 
-        <YtProjectPanel projectId={p.id} seed={p.idea?.split("\n")[0] || p.title} yt={p.yt} />
         <Brainstorm p={p} setP={setP} act={act} toast={toast} open={chatOpen} onScript={() => { setView("read"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
       </div>
       <PromptBar busy={writing} placeholder={p.script ? "Tell the writer how to revise the script… (e.g. add a twist in scene 2, make Ada angrier)" : "Describe your idea and the AI will write the screenplay…"}
