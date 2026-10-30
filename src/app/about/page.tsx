@@ -22,7 +22,7 @@ export default function Page() {
         ))}
       </section>
       <section className="mx-auto max-w-7xl px-5 pb-20 sm:px-8">
-        <img src="/brand/still-desert.webp" alt="Film still generated in ReelForge" loading="lazy" className="aspect-[21/9] w-full rounded-3xl object-cover" />
+        <img src="/brand/film-poster.jpg" alt="Still from The Akara Girl, made in ReelForge" loading="lazy" className="aspect-[21/9] w-full rounded-3xl object-cover" />
       </section>
       <CtaBand />
       <PublicFooter />

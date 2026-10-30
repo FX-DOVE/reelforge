@@ -68,7 +68,7 @@ export function Reveal({ children, className = "", delay = 0 }: { children: Reac
 }
 
 /** Film-strip marquee of stills with sprocket holes. Transform-only, paused under reduced motion. */
-export function FilmStrip({ stills }: { stills: { src: string; t: string }[] }) {
+export function FilmStrip({ stills }: { stills: { src: string; t: string; video?: string }[] }) {
   const reduce = useReducedMotion();
   const row = [...stills, ...stills];
   const holes = <div className="flex justify-between gap-3 px-2 py-1.5">{Array.from({ length: 40 }).map((_, k) => <span key={k} className="h-2.5 w-4 shrink-0 rounded-[3px] bg-white/25" />)}</div>;
@@ -79,7 +79,9 @@ export function FilmStrip({ stills }: { stills: { src: string; t: string }[] }) 
         <div className="flex gap-2 px-1">
           {row.map((s, k) => (
             <figure key={k} className="relative h-40 w-64 shrink-0 overflow-hidden rounded-sm sm:h-52 sm:w-80">
-              <img src={s.src} alt={k < stills.length ? s.t : ""} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+              {s.video && !reduce
+                ? <video src={s.video} poster={s.src} autoPlay muted loop playsInline preload="none" aria-label={k < stills.length ? s.t : undefined} className="h-full w-full object-cover" />
+                : <img src={s.src} alt={k < stills.length ? s.t : ""} loading="lazy" decoding="async" className="h-full w-full object-cover" />}
               <figcaption className="absolute bottom-1.5 left-2 font-mono text-[10px] uppercase tracking-widest text-white/70">{s.t}</figcaption>
             </figure>
           ))}

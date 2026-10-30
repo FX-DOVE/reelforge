@@ -28,24 +28,26 @@ const MODELS = [
   ["MMS & wav2vec2", "Meta’s open speech models voice each line and check it’s clear."],
 ];
 const STILLS = [
-  { src: "/brand/still-lagos.webp", t: "Market Rain · Sc 4" },
-  { src: "/brand/still-desert.webp", t: "Dune Road · Sc 1" },
-  { src: "/brand/still-fox.webp", t: "Fox & Lantern · Sc 2" },
-  { src: "/brand/still-anime.webp", t: "Skyline · Ep 1" },
+  { src: "/brand/card-akara-tray.jpg", video: "/brand/card-akara-tray.mp4", t: "The Akara Girl · Sc 1" },
+  { src: "/brand/card-do-embrace.jpg", video: "/brand/card-do-embrace.mp4", t: "Daniel & Olivia" },
+  { src: "/brand/card-akara-confront.jpg", video: "/brand/card-akara-confront.mp4", t: "The Akara Girl · The Will" },
+  { src: "/brand/card-do-chief.jpg", video: "/brand/card-do-chief.mp4", t: "Daniel & Olivia · The Chief" },
+  { src: "/brand/card-akara-will.jpg", video: "/brand/card-akara-will.mp4", t: "The Akara Girl · Reading" },
+  { src: "/brand/card-akara-lawyer.jpg", video: "/brand/card-akara-lawyer.mp4", t: "The Akara Girl · Counsel" },
 ];
 
 export default function Landing() {
   return (
     <main className="relative overflow-x-hidden bg-[#fff]">
       <PublicNav overlay />
-      <Hero video="/brand/hero-loop.mp4" poster="/brand/hero-poster.webp" />
+      <Hero video="/brand/hero-loop.mp4" poster="/brand/hero-poster.jpg" />
 
       <section className="py-6"><FilmStrip stills={STILLS} /></section>
 
       <section id="film" className="mx-auto max-w-6xl scroll-mt-20 px-5 pt-20 sm:px-8 sm:pt-28">
         <Reveal><h2 className="text-center text-4xl font-semibold tracking-[-0.03em] sm:text-6xl">Made here. Start to finish.</h2></Reveal>
         <Reveal delay={0.08}><p className="mx-auto mt-4 max-w-xl text-center text-lg text-ink-400">Written, cast, boarded, voiced and cut in ReelForge.</p></Reveal>
-        <FilmStage src="/brand/film.mp4" poster="/brand/hero-poster.webp" />
+        <FilmStage src="/brand/film.mp4" poster="/brand/film-poster.jpg" />
       </section>
 
       <section id="features" className="mx-auto max-w-7xl scroll-mt-20 px-5 py-24 sm:px-8 sm:py-32">

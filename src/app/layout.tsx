@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   title: { default: "ReelForge Studio — idea to finished film", template: "%s · ReelForge Studio" },
   description: "ReelForge Studio is an AI film studio: brainstorm, script, cast, storyboard, keep continuity, voice and cut — in one place.",
   applicationName: "ReelForge Studio",
-  openGraph: { title: "ReelForge Studio", description: "Idea to finished film in one AI studio.", images: ["/brand/still-lagos.webp"] },
+  openGraph: { title: "ReelForge Studio", description: "Idea to finished film in one AI studio.", images: ["/brand/hero-poster.jpg"] },
 };
 export const viewport: Viewport = { themeColor: "#ffffff", width: "device-width", initialScale: 1, maximumScale: 1, interactiveWidget: "resizes-content", viewportFit: "cover" };
 
