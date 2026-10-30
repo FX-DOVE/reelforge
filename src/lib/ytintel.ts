@@ -40,7 +40,7 @@ export const thumbPath = (owner: string, id: string, n: number) => path.join(dir
 // ---------- data collection ----------
 const hdr = { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9", Cookie: "CONSENT=YES+1; SOCS=CAI" };
 const num = (s?: string) => { if (!s) return 0; const m = s.replace(/,/g, "").match(/([\d.]+)\s*([KMB])?/i); if (!m) return 0; return Math.round(parseFloat(m[1]) * ({ K: 1e3, M: 1e6, B: 1e9 }[(m[2] || "").toUpperCase() as "K"] || 1)); };
-const relHours = (s?: string) => { const m = s?.match(/(\d+)\s*(second|minute|hour|day|week|month|year)/i); if (!m) return undefined; return +m[1] * ({ second: 1 / 3600, minute: 1 / 60, hour: 1, day: 24, week: 168, month: 730, year: 8760 }[m[2].toLowerCase() as "day"]); };
+const relHours = (s?: string) => { const m = s?.match(/(\d+)\s*(seconds?|minutes?|hours?|days?|weeks?|months?|years?|mo|min|hr|[smhdwy])\b/i); if (!m) return undefined; const u = m[2].toLowerCase(); const k = u.startsWith("mo") ? 730 : u.startsWith("mi") ? 1 / 60 : ({ s: 1 / 3600, m: 1 / 60, h: 1, d: 24, w: 168, y: 8760 } as Record<string, number>)[u[0]]; return k ? +m[1] * k : undefined; };
 const txt = (o: any) => o?.simpleText ?? o?.runs?.map((r: any) => r.text).join("") ?? ""; // eslint-disable-line @typescript-eslint/no-explicit-any
 function walk(o: any, key: string, out: any[] = []): any[] { if (!o || typeof o !== "object") return out; if (o[key]) out.push(o[key]); for (const v of Object.values(o)) if (v && typeof v === "object") walk(v, key, out); return out; } // eslint-disable-line @typescript-eslint/no-explicit-any
 async function initialData(url: string) {
@@ -60,14 +60,19 @@ async function publicSearch(q: string, sp?: string): Promise<YtVideo[]> {
 async function publicChannel(id: string): Promise<{ views: number[]; subs?: string; name?: string; top?: string }> {
   const { data, html } = await initialData(`https://www.youtube.com/channel/${id}/videos?hl=en`);
   const vids = walk(data, "videoRenderer").map(fromRenderer);
+  for (const l of walk(data, "lockupViewModel")) { // 2025+ channel grid layout
+    const md = l.metadata?.lockupMetadataViewModel; const parts = walk(md, "metadataParts").flat(); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const vp = parts.find((p: any) => /views?/i.test(p?.accessibilityLabel || p?.text?.content || "")); // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (md?.title?.content && vp) vids.push({ id: l.contentId, title: md.title.content, channel: "", views: num(vp.text?.content || vp.accessibilityLabel), published: parts.map((p: any) => p?.text?.content || "").find((t: string) => /ago/.test(t)) }); // eslint-disable-line @typescript-eslint/no-explicit-any
+  }
   const subs = html.match(/"subscriberCountText":\{[^}]*?"simpleText":"([^"]+)"/)?.[1] || html.match(/"content":"([\d.,]+[KMB]? subscribers)"/)?.[1];
   return { views: vids.map((v) => v.views).filter((n) => n > 0), subs, top: vids.sort((a, b) => b.views - a.views)[0]?.title };
 }
 async function publicWatch(id: string): Promise<{ tags: string[]; description: string; publishDate?: string; views?: number }> {
   const html = await (await fetch(`https://www.youtube.com/watch?v=${id}&hl=en`, { headers: hdr, signal: AbortSignal.timeout(15000) })).text();
-  const m = html.match(/ytInitialPlayerResponse\s*=\s*(\{[\s\S]+?\});(?:var|<\/script)/); const pr = m ? JSON.parse(m[1]) : null;
+  const m = html.match(/ytInitialPlayerResponse\s*=\s*(\{[\s\S]+?\});(?:var|<\/script)/); let pr: any = null; try { pr = m ? JSON.parse(m[1]) : null; } catch { /* partial match */ } // eslint-disable-line @typescript-eslint/no-explicit-any
   const d = pr?.videoDetails, mf = pr?.microformat?.playerMicroformatRenderer;
-  return { tags: d?.keywords || (html.match(/<meta name="keywords" content="([^"]*)"/)?.[1] || "").split(",").map((s) => s.trim()).filter(Boolean), description: d?.shortDescription || "", publishDate: mf?.publishDate || mf?.uploadDate, views: d?.viewCount ? +d.viewCount : undefined };
+  return { tags: d?.keywords || (html.match(/<meta name="keywords" content="([^"]*)"/)?.[1] || "").split(",").map((s) => s.trim()).filter(Boolean), description: d?.shortDescription || "", publishDate: mf?.publishDate || mf?.uploadDate || html.match(/"publishDate":"([^"]+)"/)?.[1] || html.match(/itemprop="datePublished" content="([^"]+)"/)?.[1], views: d?.viewCount ? +d.viewCount : undefined };
 }
 async function apiCollect(key: string, q: string, fmt: YtReport["format"]) {
   const g = async (p: string) => { const r = await fetch(`https://www.googleapis.com/youtube/v3/${p}&key=${key}`, { signal: AbortSignal.timeout(15000) }); const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || "YouTube API " + r.status); return j; };
