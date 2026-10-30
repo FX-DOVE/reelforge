@@ -1,3 +1,4 @@
+import { cleanBot, randomBot, type BotStyle } from "./botStyle";
 import { nanoid } from "nanoid";
 import { db } from "./db";
 import { agentStream, getConv, interrupt, type Persona } from "./agent";
@@ -6,7 +7,7 @@ import { agentStream, getConv, interrupt, type Persona } from "./agent";
 export interface AgentRec { id: string; ownerId: string; name: string; color: string; brief: string; filmStyle?: string; projectId?: string; approval: "auto" | "key"; notes: string[]; createdAt: string; updatedAt?: string }
 export interface Card { id: string; name: string; ok?: boolean; summary?: string }
 export interface ChatMsg { id: string; role: "user" | "agent" | "info"; agentId?: string; text: string; at: string; cards?: Card[]; projectId?: string }
-export interface ChatRec { id: string; ownerId: string; title: string; color?: string; topic?: string; notes?: string[]; projectIds?: string[]; filmStyle?: string; approval?: "auto" | "key"; agentIds: string[]; msgs: ChatMsg[]; createdAt: string; updatedAt?: string; busy?: boolean }
+export interface ChatRec { id: string; ownerId: string; title: string; color?: string; topic?: string; notes?: string[]; projectIds?: string[]; filmStyle?: string; approval?: "auto" | "key"; bot?: BotStyle; agentIds: string[]; msgs: ChatMsg[]; createdAt: string; updatedAt?: string; busy?: boolean }
 
 export const COLORS = ["#0071e3", "#af52de", "#ff9500", "#34c759", "#ff2d55", "#5ac8fa", "#5856d6", "#a2845e"];
 const now = () => new Date().toISOString();
@@ -28,11 +29,11 @@ export const agents = {
 export const chats = {
   list: (owner: string) => db.listDocs<ChatRec>("chats", owner).map(({ msgs, ...c }) => ({ ...c, last: msgs[msgs.length - 1]?.text.slice(0, 90) || "", count: msgs.length })),
   get: (id: string, owner: string) => { const c = db.getDoc<ChatRec>("chats", id); return c && c.ownerId === owner ? c : undefined; },
-  async create(owner: string, b: { title?: string; agentIds?: string[] }) {
+  async create(owner: string, b: { title?: string; agentIds?: string[]; bot?: unknown }) {
     const ids = (b.agentIds || []).filter((x) => agents.get(x, owner));
     const names = ids.map((x) => agents.get(x, owner)!.name);
     const n = db.listDocs<ChatRec>("chats", owner).length;
-    const c: ChatRec = { id: nanoid(10), ownerId: owner, title: String(b.title || (names[0] || "New agent")).slice(0, 80), color: COLORS[n % COLORS.length], topic: "", notes: [], projectIds: [], approval: "auto", agentIds: ids, msgs: [], createdAt: now() };
+    const c: ChatRec = { id: nanoid(10), ownerId: owner, title: String(b.title || (names[0] || "New agent")).slice(0, 80), color: COLORS[n % COLORS.length], topic: "", notes: [], projectIds: [], approval: "auto", bot: cleanBot(b.bot) || randomBot(), agentIds: ids, msgs: [], createdAt: now() };
     return db.putDoc("chats", c);
   },
   save: (c: ChatRec) => db.putDoc("chats", c),

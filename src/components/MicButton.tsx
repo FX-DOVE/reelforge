@@ -61,7 +61,7 @@ export function MicButton({ onText, onSend, className = "", dark = true }: { onT
   return (
     <div className={`relative flex shrink-0 items-center ${className}`}>
       {st === "rec" && <div className="mr-1 flex items-center gap-1.5 rounded-full px-2 py-1" style={{ background: dark ? "rgba(255,255,255,.06)" : "rgba(0,113,227,.08)" }}>
-        <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" /><canvas ref={cv} width={72} height={20} className="h-5 w-[72px]" /><span className={`text-xs tabular-nums ${dark ? "text-ink-300" : "text-[#1d1d1f]"}`}>{mm}</span>
+        <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" /><canvas ref={cv} width={72} height={20} className="h-5 w-10 sm:w-[72px]" /><span className={`text-xs tabular-nums ${dark ? "text-ink-300" : "text-[#1d1d1f]"}`}>{mm}</span>
       </div>}
       <button type="button" data-t="mic" aria-label={st === "rec" ? "Stop recording" : st === "busy" ? "Transcribing" : "Talk instead of typing"} disabled={st === "busy"} onClick={() => (st === "rec" ? stop() : start())}
         className={`m-1 grid h-8 w-8 place-items-center rounded-full transition ${st === "rec" ? "bg-red-500 text-white" : dark ? "text-ink-400 hover:bg-white/5 hover:text-white" : "text-[#6e6e73] hover:bg-black/5 hover:text-[#1d1d1f]"}`}>

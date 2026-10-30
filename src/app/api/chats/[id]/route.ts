@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/guard";
 import { db } from "@/lib/db";
+import { cleanBot } from "@/lib/botStyle";
 import { agents, chats, stopChat } from "@/lib/chats";
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ id: string }> };
@@ -11,6 +12,7 @@ export async function PATCH(req: Request, { params }: P) {
   const b = await req.json().catch(() => ({}));
   if (typeof b.title === "string" && b.title.trim()) c.title = b.title.trim().slice(0, 80);
   if (typeof b.color === "string" && /^#[0-9a-f]{6}$/i.test(b.color)) c.color = b.color;
+  if (b.bot !== undefined) { const v = cleanBot(b.bot); if (v) c.bot = v; }
   if (typeof b.topic === "string") c.topic = b.topic.slice(0, 600);
   if (typeof b.filmStyle === "string") c.filmStyle = b.filmStyle || undefined;
   if (b.approval === "auto" || b.approval === "key") c.approval = b.approval;

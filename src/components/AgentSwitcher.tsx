@@ -1,24 +1,43 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { Check, MoreHorizontal, Plus, Shuffle, Trash2 } from "lucide-react";
+import { Bot, Mascot } from "./Mascot";
+import { BOT_ACC, BOT_EYES, BOT_PALETTES, BOT_SHAPES, botFor, randomBot, type BotStyle } from "@/lib/botStyle";
 import type { AgentLite } from "./AgentChat";
 
 const COLORS = ["#0071e3", "#af52de", "#ff9500", "#34c759", "#ff2d55", "#5ac8fa", "#5856d6", "#a2845e"];
 const call = (u: string, m: string, b?: unknown) => fetch(u, { method: m, headers: { "content-type": "application/json" }, body: b ? JSON.stringify(b) : undefined });
 
-function Dot({ a, size = 36 }: { a?: AgentLite; size?: number }) {
-  return a ? <span className="grid shrink-0 place-items-center rounded-full font-semibold text-[#fff]" style={{ width: size, height: size, background: a.color || COLORS[0], fontSize: size * 0.42 }}>{a.title.slice(0, 1).toUpperCase()}</span>
-    : <img src="/brand/reel.webp" alt="" className="shrink-0 rounded-full" style={{ width: size, height: size }} />;
+function Dot({ a, size = 36, bot }: { a?: AgentLite; size?: number; bot?: BotStyle }) {
+  return <span className="grid shrink-0 place-items-center" style={{ width: size, height: size }}><Bot size={size * 0.92} style={bot || (a ? botFor(a.id, a.bot) : undefined)} /></span>;
+}
+
+const LBL: Record<string, string> = { round: "Round", tall: "Tall", cube: "Cube", retro: "Retro", glow: "Glow", happy: "Happy", visor: "Visor", pixel: "Pixel", sleepy: "Sleepy", none: "None", headphones: "Headphones", cap: "Director’s cap", beret: "Beret", twin: "Twin antenna", bow: "Bow", halo: "Halo" };
+function StylePicker({ v, set }: { v: BotStyle; set: (b: BotStyle) => void }) {
+  const chips = <K extends "shape" | "eyes" | "acc">(k: K, opts: readonly BotStyle[K][]) => <div className="mt-1.5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">{opts.map((o) => <button type="button" key={o} data-t={`bot-${k}-${o}`} onClick={() => set({ ...v, [k]: o })} className={`flex shrink-0 flex-col items-center rounded-2xl border px-2 pb-1.5 pt-1 text-[11px] ${v[k] === o ? "border-[#0071e3] bg-[#f0f7ff] text-[#0071e3]" : "border-[#e5e5ea] text-[#6e6e73]"}`}><Bot size={34} style={{ ...v, [k]: o }} />{LBL[o]}</button>)}</div>;
+  return <div className="space-y-2" data-t="bot-picker">
+    <div className="flex items-center gap-4 rounded-3xl bg-gradient-to-b from-[#f5f5f7] to-[#fff] p-3">
+      <Mascot size={86} bot={v} />
+      <div className="flex-1 text-sm text-[#6e6e73]">Pick a look for this agent. Hover or tap it to say hi.
+        <button type="button" data-t="bot-shuffle" onClick={() => set(randomBot())} className="mt-2 flex items-center gap-1.5 rounded-full bg-[#fff] px-3 py-1.5 text-[13px] font-medium text-[#0071e3] shadow-sm ring-1 ring-[#e5e5ea]"><Shuffle className="h-3.5 w-3.5" />Shuffle</button></div>
+    </div>
+    <div className="text-sm text-[#6e6e73]">Body{chips("shape", BOT_SHAPES)}</div>
+    <div className="text-sm text-[#6e6e73]">Colours<div className="mt-1.5 flex flex-wrap gap-2.5">{BOT_PALETTES.map((p, i) => <button type="button" key={p.name} aria-label={p.name} data-t={`bot-pal-${i}`} onClick={() => set({ ...v, palette: i })} className={`h-8 w-8 rounded-full ring-offset-2 ${v.palette === i ? "ring-2 ring-[#0071e3]" : "ring-1 ring-[#e5e5ea]"}`} style={{ background: `linear-gradient(135deg, ${p.body[1]} 50%, ${p.acc[0]} 50%)` }} />)}</div></div>
+    <div className="text-sm text-[#6e6e73]">Eyes{chips("eyes", BOT_EYES)}</div>
+    <div className="text-sm text-[#6e6e73]">Accessory{chips("acc", BOT_ACC)}</div>
+  </div>;
 }
 
 /** Agent switcher inside the Reel chat: a light bottom sheet on phones, a popover under the header on desktop. */
-export function AgentSwitcher({ open, onClose, agents, current, onPick, onNew, onChange, mobile }: { open: boolean; onClose: () => void; agents: AgentLite[]; current?: string; onPick: (a: AgentLite | null) => void; onNew: () => void; onChange: () => Promise<unknown>; mobile: boolean }) {
+export function AgentSwitcher({ open, onClose, agents, current, onPick, onNew, onChange, mobile, editId, onEdited }: { editId?: string | null; onEdited?: () => void; open: boolean; onClose: () => void; agents: AgentLite[]; current?: string; onPick: (a: AgentLite | null) => void; onNew: () => void; onChange: () => Promise<unknown>; mobile: boolean }) {
   const [edit, setEdit] = useState<AgentLite | null>(null);
-  const [f, setF] = useState({ title: "", color: COLORS[0], topic: "" });
+  const [f, setF] = useState<{ title: string; color: string; topic: string; bot: BotStyle }>({ title: "", color: COLORS[0], topic: "", bot: randomBot() });
+  const [isNew, setIsNew] = useState(false);
   const press = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startEdit = (a: AgentLite) => { setEdit(a); setF({ title: a.title, color: a.color || COLORS[0], topic: a.topic || "" }); };
-  const save = async () => { if (!edit || !f.title.trim()) return; await call(`/api/chats/${edit.id}`, "PATCH", { title: f.title.trim().slice(0, 80), color: f.color, topic: f.topic.trim().slice(0, 200) }); setEdit(null); await onChange(); };
+  const startEdit = (a: AgentLite, fresh = false) => { setIsNew(fresh); setEdit(a); setF({ title: a.title, color: a.color || COLORS[0], topic: a.topic || "", bot: botFor(a.id, a.bot) }); };
+  useEffect(() => { if (!open || !editId) return; const a = agents.find((x) => x.id === editId); if (a) { startEdit(a, true); onEdited?.(); } }, [open, editId, agents]); // eslint-disable-line react-hooks/exhaustive-deps
+  const save = async () => { if (!edit || !f.title.trim()) return; await call(`/api/chats/${edit.id}`, "PATCH", { title: f.title.trim().slice(0, 80), color: f.color, topic: f.topic.trim().slice(0, 200), bot: f.bot }); setEdit(null); await onChange(); };
   const del = async () => { if (!edit || !confirm(`Delete “${edit.title}” and its history?`)) return; await call(`/api/chats/${edit.id}`, "DELETE"); if (edit.id === current) onPick(null); setEdit(null); await onChange(); };
   const close = () => { setEdit(null); onClose(); };
   const row = (a: AgentLite | null) => {
@@ -46,7 +65,8 @@ export function AgentSwitcher({ open, onClose, agents, current, onPick, onNew, o
         <div className="min-h-0 overflow-y-auto overscroll-contain">{row(null)}{agents.map(row)}</div>
         <p className="px-2 pt-2 text-center text-[11px] text-[#86868b]">Press and hold or tap ··· to rename, recolour or delete</p>
       </div> : <form className="space-y-3 overflow-y-auto p-4" onSubmit={(e) => { e.preventDefault(); save(); }}>
-        <div className="flex items-center gap-3"><Dot a={{ ...edit, title: f.title || "?", color: f.color }} size={44} /><p className="text-[17px] font-semibold">Edit agent</p></div>
+        <div className="flex items-center gap-3"><p className="text-[17px] font-semibold">{isNew ? "Meet your new agent" : "Edit agent"}</p></div>
+        <StylePicker v={f.bot} set={(bot) => setF({ ...f, bot })} />
         <label className="block text-sm text-[#6e6e73]">Name<input data-t="agent-name" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} className="mt-1 w-full rounded-xl border border-[#d2d2d7] bg-[#fff] px-3 py-2.5 text-[16px] text-[#1d1d1f] outline-none focus:border-[#0071e3]" /></label>
         <div className="text-sm text-[#6e6e73]">Colour<div className="mt-1.5 flex flex-wrap gap-2.5">{COLORS.map((c) => <button type="button" key={c} aria-label={c} onClick={() => setF({ ...f, color: c })} className={`h-8 w-8 rounded-full ring-offset-2 ${f.color === c ? "ring-2 ring-[#1d1d1f]" : ""}`} style={{ background: c }} />)}</div></div>
         <label className="block text-sm text-[#6e6e73]">Topic (optional)<input data-t="agent-topic" value={f.topic} onChange={(e) => setF({ ...f, topic: e.target.value })} placeholder="e.g. Wildlife documentaries" className="mt-1 w-full rounded-xl border border-[#d2d2d7] bg-[#fff] px-3 py-2.5 text-[16px] text-[#1d1d1f] outline-none focus:border-[#0071e3]" /></label>

@@ -6,7 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { AgentSwitcher } from "./AgentSwitcher";
 import { ArrowUp, Check, ChevronDown, ChevronLeft, Monitor, Plus, Loader2, Paperclip, RotateCw, Square, Volume2, VolumeX, Wrench, X } from "lucide-react";
-import { Mascot } from "./Mascot";
+import { Bot, Mascot } from "./Mascot";
+import { botFor, randomBot, type BotStyle } from "@/lib/botStyle";
 import { MicButton } from "./MicButton";
 import { autoResearchPref } from "@/lib/autopref";
 import { ResearchBar, type ResearchJob } from "./ResearchBar";
@@ -23,7 +24,7 @@ function Text({ t }: { t: string }) {
   return <>{t.split("\n").map((l, i) => { const b = l.match(/^\s*(?:[-*•]|\d+[.)])\s+(.*)/); const parts = (b ? b[1] : l).replace(/^#+\s*/, "").split(/(\*\*[^*]+\*\*)/g).map((x, k) => x.startsWith("**") ? <strong key={k} className="text-white">{x.slice(2, -2)}</strong> : x); return l.trim() ? <p key={i} className={b ? "flex gap-1.5 pl-1" : ""}>{b && <span className="text-brand-400">•</span>}<span>{parts}</span></p> : <div key={i} className="h-1.5" />; })}</>;
 }
 
-export type AgentLite = { id: string; title: string; color?: string; topic?: string };
+export type AgentLite = { id: string; title: string; color?: string; topic?: string; bot?: BotStyle };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fromMsgs = (msgs: any[]): Item[] => msgs.flatMap((m): Item[] => m.role === "user" ? [{ k: "user", text: m.text }] : m.role === "info" ? [{ k: "info", text: m.text }]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -115,12 +116,12 @@ export function AgentChat({ projectId, onSession, className = "", starters, agen
     <div className={`flex min-h-0 flex-col ${className}`}>
       <div ref={list} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain px-3 py-4 text-[15px] sm:text-sm">
         {!items.length && <div className="flex flex-col items-center px-4 pt-6 text-center">
-          {agent ? <span className="grid h-[72px] w-[72px] place-items-center rounded-full text-3xl font-semibold text-[#fff] shadow-md" style={{ background: agent.color || "#0071e3" }}>{agent.title.slice(0, 1).toUpperCase()}</span> : <Mascot size={72} still />}
+          <Mascot size={72} bot={agent ? botFor(agent.id, agent.bot) : undefined} />
           <p className="mt-4 text-base font-medium text-white">{agent ? `Hi, I’m ${agent.title}.` : "Hi, I’m Reel."}</p>
           <p className="mt-1 max-w-xs text-sm text-ink-400">{agent ? `${agent.topic ? agent.topic + ". " : ""}Give me an idea and I’ll make the whole film — script, voices, storyboard, animation and render — or just one step.` : "Tell me what you want to make. I can start projects, brainstorm, write, storyboard, voice and render — or research on my computer."}</p>
           <div className="mt-6 flex w-full flex-col gap-2">{(starters || (agent ? ["Make a 60s film from my idea", "Narrate a wildlife short", "Write a two-character dialogue scene"] : ["Make a 60s TikTok ad for my akara brand", "What’s trending in Nollywood family drama?", "Turn my last idea into a 3-scene script"])).map((s) => <button key={s} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-left text-sm text-ink-200 transition hover:border-brand-500/50 hover:text-white" onClick={() => send(s)}>{s}</button>)}</div></div>}
         {items.map((it, i) => it.k === "user" ? <div key={i} className="flex justify-end"><div className="max-w-[82%] whitespace-pre-wrap break-words rounded-[20px] rounded-br-md bg-brand-500 px-3.5 py-2 text-ink-950">{it.text.replace(/\n\n\[Attached: ([^\]]+)\][\s\S]*$/, "\n📎 $1")}</div></div>
-          : it.k === "ai" ? <div key={i} className="flex items-end gap-2">{agent ? <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-semibold text-[#fff]" style={{ background: agent.color }}>{agent.title.slice(0, 1).toUpperCase()}</span> : <img src="/brand/reel.webp" alt="" className="h-7 w-7 shrink-0 rounded-full" />}<div className="max-w-[82%] space-y-1 break-words rounded-[20px] rounded-bl-md bg-ink-800 px-3.5 py-2 text-ink-100"><Text t={it.text} />{it.live && <span className="inline-block h-3 w-1.5 animate-pulse bg-brand-400 align-middle" />}</div></div>
+          : it.k === "ai" ? <div key={i} className="flex items-end gap-2"><span className="shrink-0"><Bot size={26} style={agent ? botFor(agent.id, agent.bot) : undefined} /></span><div className="max-w-[82%] space-y-1 break-words rounded-[20px] rounded-bl-md bg-ink-800 px-3.5 py-2 text-ink-100"><Text t={it.text} />{it.live && <span className="inline-block h-3 w-1.5 animate-pulse bg-brand-400 align-middle" />}</div></div>
           : it.k === "tool" ? <div key={i} className="ml-9 max-w-[82%] rounded-2xl border border-white/[0.08] bg-ink-900 p-2.5 text-xs">
               <div className="flex items-center gap-2 font-medium text-white">{it.ok === undefined ? <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-400" /> : it.ok ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <X className="h-3.5 w-3.5 text-red-400" />}<Wrench className="h-3 w-3 text-ink-500" />{LABEL[it.name] || it.name}<span className="truncate font-normal text-ink-500">{Object.values(it.args || {}).filter((v) => typeof v === "string").join(" · ").slice(0, 60)}</span></div>
               {it.status && it.ok === undefined && <ul className="mt-1.5 space-y-0.5 text-ink-400">{it.status.map((s, j) => <li key={j} className="truncate">{s}</li>)}</ul>}
@@ -128,7 +129,7 @@ export function AgentChat({ projectId, onSession, className = "", starters, agen
             </div>
           : it.retry ? <div key={i} role="alert" className="mx-auto flex max-w-[90%] flex-col items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-center text-xs text-red-200">{it.text.replace(/^⚠ /, "")}<button className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-ink-950" onClick={() => { setItems((x) => x.filter((_, j) => j !== i && !(j === i - 1 && x[j].k === "user"))); send(it.retry); }}><RotateCw className="h-3.5 w-3.5" />Retry</button></div>
           : <p key={i} className="text-center text-[11px] text-ink-500">{it.text.includes("/studio/") ? <a className="underline" href={it.text.split("— ")[1]}>{it.text.split(" — ")[0]} → open</a> : it.text}</p>)}
-        {thinking && <div className="flex items-end gap-2" aria-label="Reel is typing"><img src="/brand/reel.webp" alt="" className="h-7 w-7 rounded-full" /><div className="dot-typing flex gap-1 rounded-[20px] rounded-bl-md bg-ink-800 px-4 py-3">{[0, 1, 2].map((d) => <span key={d} className="h-1.5 w-1.5 rounded-full bg-ink-300" />)}</div></div>}
+        {thinking && <div className="flex items-end gap-2" aria-label="Reel is typing"><span className="shrink-0"><Bot size={26} style={agent ? botFor(agent.id, agent.bot) : undefined} /></span><div className="dot-typing flex gap-1 rounded-[20px] rounded-bl-md bg-ink-800 px-4 py-3">{[0, 1, 2].map((d) => <span key={d} className="h-1.5 w-1.5 rounded-full bg-ink-300" />)}</div></div>}
         <div ref={end} />
       </div>
       <div className="pb-safe shrink-0 border-t border-white/[0.06] bg-ink-950 px-3 pt-2">
@@ -138,7 +139,7 @@ export function AgentChat({ projectId, onSession, className = "", starters, agen
           <input ref={fileRef} type="file" multiple hidden onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
           <button aria-label="Attach file" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white" onClick={() => fileRef.current?.click()}><Paperclip className="h-5 w-5" /></button>
           <div className="flex min-h-10 flex-1 items-end rounded-[22px] border border-white/10 bg-ink-900 pl-4 pr-1 focus-within:border-white/25">
-            <textarea rows={1} value={input} onChange={(e) => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 128) + "px"; }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !matchMedia("(pointer: coarse)").matches) { e.preventDefault(); send(); } }} placeholder={busy ? `Redirect ${agent?.title || "Reel"}, or say “stop”…` : `Message ${agent?.title || "Reel"}`} aria-label="Message" enterKeyHint="send" autoComplete="off" className="max-h-32 min-h-[38px] flex-1 resize-none bg-transparent py-2 text-[16px] leading-6 outline-none placeholder:text-ink-500 md:text-sm" />
+            <textarea rows={1} value={input} onChange={(e) => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 128) + "px"; }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !matchMedia("(pointer: coarse)").matches) { e.preventDefault(); send(); } }} placeholder={busy ? `Redirect ${agent?.title || "Reel"}, or say “stop”…` : `Message ${agent?.title || "Reel"}`} aria-label="Message" enterKeyHint="send" autoComplete="off" className="max-h-32 min-h-[38px] min-w-0 flex-1 resize-none bg-transparent py-2 text-[16px] leading-6 outline-none placeholder:text-ink-500 md:text-sm" />
             <MicButton onText={(t) => setInput((v) => (v.trim() ? v.trimEnd() + " " : "") + t)} onSend={(t) => send(t)} />
             {busy && !input ? <button aria-label="Stop" className="m-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-ink-950" onClick={() => send("stop")}><Square className="h-3.5 w-3.5 fill-current" /></button>
               : <button aria-label="Send" className="m-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-500 text-ink-950 disabled:bg-white/10 disabled:text-ink-500" disabled={!input.trim() && !files.length} onClick={() => send()}><ArrowUp className="h-4 w-4" /></button>}
@@ -160,8 +161,9 @@ export function FloatingAgent() {
   const [agents, setAgents] = useState<AgentLite[]>([]);
   const [cur, setCur] = useState<AgentLite | null>(null);
   const [pick, setPick] = useState(false);
+  const [styleFor, setStyleFor] = useState<string | null>(null);
   const reload = async () => { const r = await fetch("/api/chats").then((x) => x.ok ? x.json() : null).catch(() => null); const l: AgentLite[] = r?.chats || []; setAgents(l); setCur((c) => { const id = c?.id || localStorage.getItem("rf-agent"); return l.find((a) => a.id === id) || null; }); return l; };
-  useEffect(() => { if (open) reload(); }, [open]);
+  useEffect(() => { reload(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const [mob, setMob] = useState(false);
   const [vv, setVv] = useState<{ top: number; h: number } | null>(null);
   useEffect(() => {
@@ -186,7 +188,7 @@ export function FloatingAgent() {
   if (path.startsWith("/admin")) return null;
   const projectId = path.match(/^\/studio\/([^/]+)/)?.[1];
   const choose = (a: AgentLite | null) => { setCur(a); void fetch("/api/desk/workspace", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ws: a?.id || "main" }) }).catch(() => {}); setPick(false); if (a) localStorage.setItem("rf-agent", a.id); else localStorage.removeItem("rf-agent"); };
-  const newAgent = async () => { const n = agents.filter((a) => /^AI video agent/.test(a.title)).length; const r = await fetch("/api/chats", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: n ? `AI video agent ${n + 1}` : "AI video agent" }) }).then((x) => x.ok ? x.json() : null).catch(() => null); if (r?.chat) { await reload(); choose(r.chat); } };
+  const newAgent = async () => { const n = agents.filter((a) => /^AI video agent/.test(a.title)).length; const r = await fetch("/api/chats", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: n ? `AI video agent ${n + 1}` : "AI video agent", bot: randomBot() }) }).then((x) => x.ok ? x.json() : null).catch(() => null); if (r?.chat) { await reload(); choose(r.chat); setStyleFor(r.chat.id); setPick(true); } };
   const mute = () => { const m = !muted; setMuted(m); localStorage.setItem("rf-mute", m ? "1" : "0"); };
   return (
     <>
@@ -197,7 +199,7 @@ export function FloatingAgent() {
           <div className="flex h-14 items-center gap-3 px-2 md:px-4">
             <button aria-label="Close chat" className="grid h-10 w-10 place-items-center rounded-full text-ink-300 hover:bg-white/5 md:hidden" onClick={() => setOpen(false)}><ChevronLeft className="h-6 w-6" /></button>
             <button data-t="agent-switch" aria-label="Switch agent" aria-haspopup="dialog" aria-expanded={pick} onClick={() => setPick((x) => !x)} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-1 pr-2 text-left active:opacity-70">
-              <div className="relative shrink-0">{cur ? <span className="grid h-9 w-9 place-items-center rounded-full text-[15px] font-semibold text-[#fff]" style={{ background: cur.color }}>{cur.title.slice(0, 1).toUpperCase()}</span> : <Mascot size={34} still />}<span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-ink-950 bg-emerald-400" /></div>
+              <div className="relative shrink-0"><Mascot size={34} still bot={cur ? botFor(cur.id, cur.bot) : undefined} /><span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-ink-950 bg-emerald-400" /></div>
               <div className="min-w-0 leading-tight"><p className="flex items-center gap-1 text-[15px] font-semibold"><span className="truncate">{cur?.title || "Reel"}</span><ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${pick ? "rotate-180" : ""}`} /></p><p className="truncate text-xs text-ink-400">{cur ? (cur.topic || "Producer") : projectId ? "Working on this project" : "Producer · ReelForge Studio"}</p></div>
             </button>
             <button data-t="agent-new" aria-label="New agent" className="grid h-10 w-10 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white" onClick={newAgent}><Plus className="h-5 w-5" /></button>
@@ -209,9 +211,9 @@ export function FloatingAgent() {
         <AnimatePresence mode="wait" initial={false}><motion.div key={cur?.id || "reel"} className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.18 }}>
           <AgentChat projectId={cur ? undefined : projectId} agent={cur || undefined} className="flex-1" />
         </motion.div></AnimatePresence>
-        <AgentSwitcher open={pick} onClose={() => setPick(false)} agents={agents} current={cur?.id} onPick={choose} onNew={newAgent} onChange={reload} mobile={mob} />
+        <AgentSwitcher open={pick} onClose={() => setPick(false)} agents={agents} current={cur?.id} onPick={choose} onNew={newAgent} onChange={reload} mobile={mob} editId={styleFor} onEdited={() => setStyleFor(null)} />
       </div>}
-      {!open && <Mascot floating onTap={() => setOpen(true)} />}
+      {!open && <Mascot floating bot={cur ? botFor(cur.id, cur.bot) : undefined} onTap={() => setOpen(true)} />}
     </>
   );
 }
