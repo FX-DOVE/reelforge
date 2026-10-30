@@ -9,7 +9,11 @@ import { fileURLToPath } from "node:url";
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const PORT = +(process.env.DESK_PORT || 7900), DISP = process.env.DESK_DISPLAY || ":7";
-const W = 1280, H = 720, FPS = +(process.env.DESK_FPS || 10), QV = +(process.env.DESK_QV || 9);
+const W = 1280, H = 720, QV = +(process.env.DESK_QV || 6);
+// stream profiles: viewers pick sharp/auto/fast; "auto" drops to "low" while a viewer's link can't keep up, and recovers when it can
+const PROFILES = { sharp: { fps: 12, qv: 3 }, auto: { fps: +(process.env.DESK_FPS || 15), qv: QV }, fast: { fps: 20, qv: 11 }, low: { fps: 10, qv: 16 } };
+let profile = "auto", degraded = false, lastSwitch = 0;
+const prof = () => PROFILES[profile === "auto" && degraded ? "low" : profile];
 const HOME = process.env.DESK_HOME || path.join(process.cwd(), "data", "desk-home");
 const CHROME = process.env.DESK_CHROME || "chromium";
 const CDP = +(process.env.DESK_CDP_PORT || 9333);
@@ -69,13 +73,19 @@ function sleepNow() {
 function shutdown() { stopStream(); for (const p of procs) try { process.kill(-p.pid, "SIGKILL"); } catch {} procs = []; }
 
 function startStream() {
-  if (ff) return;
-  ff = spawn("ffmpeg", ["-loglevel", "error", "-f", "x11grab", "-draw_mouse", "0", "-framerate", String(FPS), "-video_size", `${W}x${H}`, "-i", DISP, "-q:v", String(QV), "-f", "image2pipe", "-vcodec", "mjpeg", "-"], { env, stdio: ["ignore", "pipe", "pipe"] });
+  if (ff) return; const { fps, qv } = prof();
+  const p = ff = spawn("ffmpeg", ["-loglevel", "error", "-fflags", "nobuffer", "-probesize", "32", "-f", "x11grab", "-draw_mouse", "0", "-framerate", String(fps), "-video_size", `${W}x${H}`, "-i", DISP, "-q:v", String(qv), "-flush_packets", "1", "-f", "image2pipe", "-vcodec", "mjpeg", "-"], { env, stdio: ["ignore", "pipe", "pipe"] });
   let buf = Buffer.alloc(0);
-  ff.stdout.on("data", (d) => { buf = Buffer.concat([buf, d]); for (;;) { const s = buf.indexOf(Buffer.from([0xff, 0xd8])); const e = buf.indexOf(Buffer.from([0xff, 0xd9]), s + 2); if (s < 0 || e < 0) break; frame = buf.subarray(s, e + 2); buf = buf.subarray(e + 2); push(frame); } if (buf.length > 4e6) buf = Buffer.alloc(0); });
-  ff.stderr.on("data", (d) => log("ffmpeg", String(d).trim()));
-  ff.on("exit", () => { ff = null; if (state === "awake") setTimeout(startStream, 1000); });
+  p.stdout.on("data", (d) => { buf = Buffer.concat([buf, d]); for (;;) { const s = buf.indexOf(Buffer.from([0xff, 0xd8])); const e = buf.indexOf(Buffer.from([0xff, 0xd9]), s + 2); if (s < 0 || e < 0) break; frame = buf.subarray(s, e + 2); buf = buf.subarray(e + 2); push(frame); } if (buf.length > 4e6) buf = Buffer.alloc(0); });
+  p.stderr.on("data", (d) => log("ffmpeg", String(d).trim()));
+  p.on("exit", () => { if (ff !== p) return; ff = null; if (state === "awake") setTimeout(startStream, 1000); });
 }
+function restartStream() { lastSwitch = Date.now(); if (state !== "awake") return; stopStream(); startStream(); }
+// clipboard: X CLIPBOARD (and PRIMARY, for xterm) ⇄ the viewer's clipboard
+let lastClip = "";
+const setClip = (text) => Promise.all(["clipboard", "primary"].map((sel) => new Promise((ok) => {
+  const p = spawn("xclip", ["-selection", sel, "-i"], { env, stdio: ["pipe", "ignore", "ignore"] }); p.on("error", ok); p.on("exit", ok); setTimeout(ok, 1500); p.stdin.end(text);
+}))).then(() => { lastClip = text; });
 function stopStream() { const f = ff; ff = null; f?.kill("SIGKILL"); }
 
 const X = (v) => Math.round(Math.max(0, Math.min(1, +v || 0)) * (W - 1)), Y = (v) => Math.round(Math.max(0, Math.min(1, +v || 0)) * (H - 1));
@@ -93,6 +103,9 @@ async function input(o) {
     case "hscroll": { const n = Math.min(15, Math.max(1, Math.round(Math.abs(+o.dx || 0) / 60))); if (o.x != null) await xd("mousemove", X(o.x), Y(o.y)); return xd("click", "--repeat", n, "--delay", 15, +o.dx > 0 ? 7 : 6); }
     case "type": return xd("type", "--delay", 8, "--", String(o.text || "").slice(0, 2000));
     case "key": { const k = KEYS[o.key] || String(o.key || ""); if (!/^[\w+]+$/.test(k)) return; return xd("key", "--clearmodifiers", k); }
+    case "clipset": return setClip(String(o.text || "").slice(0, 100000));
+    case "paste": { await setClip(String(o.text || "").slice(0, 100000)); const f = await focus(); return xd("key", "--clearmodifiers", /xterm/.test(f.cls) ? "shift+Insert" : "ctrl+v"); }
+    case "quality": if (PROFILES[o.v] && o.v !== "low" && o.v !== profile) { profile = o.v; degraded = false; restartStream(); } return;
     case "open": { const f = { files: "1-files", terminal: "2-terminal", browser: "3-browser" }[o.app]; if (!f) return; const ex = fs.readFileSync(path.join(HOME, "Desktop", f + ".desktop"), "utf8").match(/^Exec=(.*)$/m)[1]; procs.push(spawn("sh", ["-c", ex], { env, cwd: HOME, stdio: "ignore", detached: true })); return; }
   }
 }
@@ -133,6 +146,7 @@ async function pump(c) {
     try {
       seen = Date.now(); if (state !== "awake") await wake();
       await input(o);
+      if (o.t === "key" && /^ctrl\+(shift\+)?[cx]$/i.test(String(o.key))) setTimeout(pollClip, 250);
       if (o.id && (o.t === "click" || o.t === "up")) wsJson(c, { t: "ack", id: o.id, ...(await focus()) });
     } catch (e) { log("ws input", e.message); }
   }
@@ -146,7 +160,7 @@ function upgrade(req, sock) {
   sock.setNoDelay(true);
   const c = { sock, q: [], busy: false, last: "", drop: 0 }; clients.add(c); seen = Date.now();
   if (state !== "awake") wake().catch(() => {}); else if (frame) push(frame);
-  wsJson(c, { t: "status", state, control });
+  c.clip = lastClip; wsJson(c, { t: "status", state, control, w: W, h: H, profile });
   let buf = Buffer.alloc(0);
   sock.on("data", (d) => {
     buf = Buffer.concat([buf, d]);
@@ -166,6 +180,27 @@ function upgrade(req, sock) {
   const bye = () => clients.delete(c); sock.on("close", bye); sock.on("error", bye);
 }
 
+const broadcast = (o) => { for (const c of clients) wsJson(c, o); };
+// the real pointer position (also when an agent drives it) → viewers draw a smooth cursor
+let curBusy = false, curLast = "";
+setInterval(async () => {
+  if (!clients.size || state !== "awake" || curBusy) return; curBusy = true;
+  try { const m = (await sh("xdotool", ["getmouselocation", "--shell"], { timeout: 1000 })).match(/X=(\d+)\s+Y=(\d+)/); if (m && m[0] !== curLast) { curLast = m[0]; broadcast({ t: "cur", x: +m[1] / (W - 1), y: +m[2] / (H - 1) }); } } finally { curBusy = false; }
+}, 120);
+// remote copy → viewers (they write it to the local clipboard)
+let clipBusy = false;
+async function pollClip() {
+  if (!clients.size || state !== "awake" || clipBusy) return; clipBusy = true;
+  try { const t = await sh("xclip", ["-selection", "clipboard", "-o"], { timeout: 1000 }); if (t && t !== lastClip) lastClip = t; for (const c of clients) if (lastClip && c.clip !== lastClip) { c.clip = lastClip; wsJson(c, { t: "clip", text: lastClip.slice(0, 100000) }); } } finally { clipBusy = false; }
+}
+setInterval(pollClip, 1000);
+// adaptive quality for "auto": frames dropped for slow links → lower quality; a clean stretch → back up
+setInterval(() => {
+  let drops = 0; for (const c of clients) { drops += c.drop; c.drop = 0; }
+  if (profile !== "auto" || state !== "awake") return; const since = Date.now() - lastSwitch;
+  if (!degraded && drops > 4 && since > 8000) { degraded = true; log("stream: degrade"); restartStream(); broadcast({ t: "profile", profile, degraded }); }
+  else if (degraded && drops === 0 && since > 20000) { degraded = false; log("stream: recover"); restartStream(); broadcast({ t: "profile", profile, degraded }); }
+}, 3000);
 setInterval(() => { if (clients.size) seen = Date.now(); if (state === "awake" && !control && Date.now() - seen > IDLE_MS) sleepNow(); }, 15000);
 
 const body = (req) => new Promise((r) => { let s = ""; req.on("data", (d) => (s += d)); req.on("end", () => { try { r(JSON.parse(s || "{}")); } catch { r({}); } }); });
