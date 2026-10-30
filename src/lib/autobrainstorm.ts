@@ -125,6 +125,7 @@ async function execute(pid: string, prompt: string, ownerId: string) {
 ${g ? genreBrief(g, "script") : ""}
 ${lengthBrief(p.targetSec!)}
 Screenplay format: first line "TITLE: ...", scene headings (INT./EXT. LOCATION - TIME), action lines, CHARACTER in caps on its own line, then dialogue (one speaker per line, 4–14 simple, easily pronounced words — voices are synthetic). ${p.mode !== "drama" ? "Use NARRATOR for voice-over." : ""} Describe every character vividly on first appearance (age, gender, face, skin tone, hair, build, exact wardrobe colours, accessories) and keep wardrobe/props/locations consistent scene to scene (continuity). Open with a 2-second hook; end with a satisfying payoff or cliffhanger.
+ORIGINALITY: never reuse the skill's example lines or their character names (e.g. Ada, Chidi, Mama Nkem) — invent fresh names and fresh dialogue for this story.
 Return JSON {"title": string, "logline": one sentence, "idea": short development note (premise, hook, beats, characters), "script": the full screenplay}.`,
     `USER REQUEST: ${prompt}\n\nTOP-PERFORMING SIMILAR VIDEOS:\n${srcList}\n\nRESEARCH NOTES:\n${notes.join("\n\n").slice(0, 22000)}\n\nBudget reminder: ~${b.words} spoken words, ${b.scenes} scenes.`,
     () => ({ title: p.title, logline: prompt, idea: prompt, script: `TITLE: ${p.title}\n\nEXT. STREET - DAY\n\nDemo mode — add a Meta key in Admin.` }), undefined, "director");
@@ -132,7 +133,7 @@ Return JSON {"title": string, "logline": one sentence, "idea": short development
   let script = [raw.script, raw.screenplay].find((v) => typeof v === "string" && (v as string).length > 40) as string | undefined;
   if (!script) throw new Error("Muse returned no script — try again");
   const fit = await fitLength(p, script, (t) => void step(pid, t)); script = fit.script;
-  await db.update(pid, (x) => { x.script = script!; x.idea = [data.title && `${data.title}: `, data.logline, data.idea && `\n${data.idea}`].filter(Boolean).join(""); if (data.title && (!x.title || x.title === "Untitled project")) x.title = data.title; });
+  await db.update(pid, (x) => { x.script = script!; x.idea = [data.title && `${data.title}: `, data.logline, data.idea && `\n${data.idea}`].filter(Boolean).join(""); if (data.title && (!x.title || /^untitled( project)?$/i.test(x.title.trim()))) x.title = data.title; });
   await step(pid, "Building the characters, wardrobe, locations & props bible…");
   try { await extractAssets(db.getProject(pid)!); } catch { /* user can rebuild from the Bible tab */ }
   const est = estimateRuntime(script).sec;
