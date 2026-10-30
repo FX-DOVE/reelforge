@@ -96,7 +96,7 @@ async function execute(pid: string, prompt: string, ownerId: string) {
   if (rs) { await upd(pid, (a) => { a.researchId = rs!.id; }); await step(pid, "Working on Reel’s computer — browsing YouTube (tap the computer icon to watch)"); }
   // 2b) YouTube Intelligence skill (vidIQ-style): competitor outliers, ranked titles, tags — runs in the background, shapes the script
   let yti: import("./ytintel").YtReport | null = null; let ytiId = "";
-  try { const { startReport } = await import("./ytintel"); ytiId = startReport({ ownerId, topic: plan.topic, format: p.format === "yt_long" ? "long" : "shorts", minutes: Math.max(1, Math.round((p.targetSec || 60) / 60)), mockup: false, projectId: pid }).id; await step(pid, "YouTube Intelligence: studying competing channels, outliers, titles and keywords…"); } catch { /* optional */ }
+  try { const { startReport } = await import("./ytintel"); ytiId = startReport({ ownerId, topic: (plan.yt || [])[0] || plan.topic, format: p.format === "yt_long" ? "long" : "shorts", minutes: Math.max(1, Math.round((p.targetSec || 60) / 60)), mockup: false, projectId: pid }).id; await step(pid, "YouTube Intelligence: studying competing channels, outliers, titles and keywords…"); } catch { /* optional */ }
   // 3) in parallel: more YouTube queries + web research
   for (const q of (plan.yt || []).slice(0, 4)) { await step(pid, `YouTube search: “${q}”`); await add(await ytSearch(q)); }
   const vids = all.filter((s) => s.kind === "youtube");
@@ -117,7 +117,7 @@ async function execute(pid: string, prompt: string, ownerId: string) {
     await add([...s.trending.map((v) => ({ kind: "desktop" as const, title: v.title, url: v.url, meta: [v.channel, v.views, v.length].filter(Boolean).join(" · ") })), ...(s.facts || []).slice(0, 8).map((f) => ({ kind: "desktop" as const, title: f.slice(0, 90), meta: "Google (desktop browser)" }))]);
     if (s.notes) notes.unshift(`DESKTOP RESEARCH NOTES:\n${s.notes.slice(0, 3000)}`); notes.push(...s.findings.slice(0, 4).map((f) => f.slice(0, 1800)));
   }
-  if (ytiId) { const { waitReport } = await import("./ytintel"); yti = await waitReport(ownerId, ytiId, 180_000); if (yti?.status === "done") { await step(pid, `YouTube Intelligence: ${yti.videos?.length || 0} competitor videos · top title “${yti.titles?.[0]?.title || "-"}”`); const { reportText } = await import("./ytintel"); notes.unshift(`YOUTUBE INTELLIGENCE (what performs — use it to shape the hook, title and pacing):\n${reportText(yti).slice(0, 3500)}`); } else await step(pid, "YouTube Intelligence still running — writing without it"); }
+  if (ytiId) { const { waitReport } = await import("./ytintel"); yti = await waitReport(ownerId, ytiId, 180_000); if (yti?.status === "done") { await step(pid, `YouTube Intelligence: ${yti.videos?.length || 0} competitor videos · top title “${yti.titles?.[0]?.title || "-"}”`); const { reportText } = await import("./ytintel"); notes.unshift(`YOUTUBE INTELLIGENCE (what performs — use it to shape the hook, title and pacing):\n${reportText(yti).slice(0, 3500)}`); } else await step(pid, yti?.status === "error" ? `YouTube Intelligence skipped: ${(yti.error || "").slice(0, 90)}` : "YouTube Intelligence still running — writing without it"); }
   await step(pid, `Gathered ${all.length} sources — choosing the film style…`);
   // 4) synthesis: one complete script with the genre skill + bible
   await pickGenre(p, prompt); p = db.getProject(pid)!; const g = genreFor(p);
