@@ -1,4 +1,5 @@
 "use client";
+import { MicButton } from "./MicButton";
 import { motion } from "motion/react";
 import { friendly } from "@/lib/net";
 import { FilmStylePicker } from "./FilmStylePicker";
@@ -150,7 +151,9 @@ function NewProject({ open, onClose }: { open: boolean; onClose: () => void }) {
           <Segmented value={start} onChange={setStart} options={[{ value: "idea", label: "An idea" }, { value: "script", label: "My script" }, { value: "brainstorm", label: "Brainstorm with AI" }]} />
           <input className="input mt-3" placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
           {start === "idea" && <textarea className="input mt-2 min-h-24" placeholder="e.g. A Lagos akara seller discovers her fiancé has a secret family in Abuja" value={idea} onChange={(e) => setIdea(e.target.value)} />}
+          {start === "idea" && <div className="mt-1 flex justify-end"><MicButton dark={false} onText={(t) => setIdea((v) => (v.trim() ? v.trimEnd() + " " : "") + t)} /></div>}
           {start === "script" && <textarea className="input screenplay mt-2 min-h-40 text-[13px]" placeholder={"TITLE: ...\n\nINT. LOCATION - NIGHT\nAction...\n\nCHARACTER\nDialogue"} value={script} onChange={(e) => setScript(e.target.value)} />}
+          {start === "script" && <div className="mt-1 flex justify-end"><MicButton dark={false} onText={(t) => setScript((v) => (v.trim() ? v.trimEnd() + "\n" : "") + t)} /></div>}
           {start === "brainstorm" && <p className="mt-2 text-sm text-ink-400">You’ll land in the script room with the writer ready to brainstorm.</p>}
         </div>
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

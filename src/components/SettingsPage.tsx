@@ -34,6 +34,8 @@ export function SettingsPage() {
         <button className="btn-outline h-10" onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); window.location.href = "/login"; }}><LogOut className="h-4 w-4" />Sign out</button>
       </section>
 
+      <VoiceSetting />
+
       <section className="panel mt-6 p-5">
         <div className="flex items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-500/15"><Brain className="h-5 w-5 text-brand-400" /></span>
@@ -72,5 +74,17 @@ export function SettingsPage() {
         </>}
       </section>
     </div>
+  );
+}
+
+function VoiceSetting() {
+  const [on, setOn] = useState(false);
+  useEffect(() => setOn(localStorage.getItem("rf-voice-autosend") === "1"), []);
+  const flip = () => { const v = !on; setOn(v); localStorage.setItem("rf-voice-autosend", v ? "1" : "0"); };
+  return (
+    <section className="panel mt-6 flex items-center gap-3 p-5">
+      <div className="min-w-0 flex-1"><div className="font-medium">Voice input</div><div className="text-sm text-ink-400">Tap the mic and talk. Your words are turned into text on ReelForge’s own server with Meta’s speech model. Turn this on to send voice messages to the agent straight away instead of editing first.</div></div>
+      <button role="switch" aria-checked={on} data-t="voice-autosend" onClick={flip} className={`relative h-7 w-12 shrink-0 rounded-full transition ${on ? "bg-brand-500" : "bg-white/15"}`}><span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${on ? "left-[22px]" : "left-0.5"}`} /></button>
+    </section>
   );
 }

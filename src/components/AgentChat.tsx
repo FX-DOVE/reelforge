@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { AgentSwitcher } from "./AgentSwitcher";
 import { ArrowUp, Check, ChevronDown, ChevronLeft, Monitor, Plus, Loader2, Paperclip, RotateCw, Square, Volume2, VolumeX, Wrench, X } from "lucide-react";
 import { Mascot } from "./Mascot";
+import { MicButton } from "./MicButton";
 import { autoResearchPref } from "@/lib/autopref";
 import { ResearchBar, type ResearchJob } from "./ResearchBar";
 
@@ -138,6 +139,7 @@ export function AgentChat({ projectId, onSession, className = "", starters, agen
           <button aria-label="Attach file" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white" onClick={() => fileRef.current?.click()}><Paperclip className="h-5 w-5" /></button>
           <div className="flex min-h-10 flex-1 items-end rounded-[22px] border border-white/10 bg-ink-900 pl-4 pr-1 focus-within:border-white/25">
             <textarea rows={1} value={input} onChange={(e) => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 128) + "px"; }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !matchMedia("(pointer: coarse)").matches) { e.preventDefault(); send(); } }} placeholder={busy ? `Redirect ${agent?.title || "Reel"}, or say “stop”…` : `Message ${agent?.title || "Reel"}`} aria-label="Message" enterKeyHint="send" autoComplete="off" className="max-h-32 min-h-[38px] flex-1 resize-none bg-transparent py-2 text-[16px] leading-6 outline-none placeholder:text-ink-500 md:text-sm" />
+            <MicButton onText={(t) => setInput((v) => (v.trim() ? v.trimEnd() + " " : "") + t)} onSend={(t) => send(t)} />
             {busy && !input ? <button aria-label="Stop" className="m-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-ink-950" onClick={() => send("stop")}><Square className="h-3.5 w-3.5 fill-current" /></button>
               : <button aria-label="Send" className="m-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-500 text-ink-950 disabled:bg-white/10 disabled:text-ink-500" disabled={!input.trim() && !files.length} onClick={() => send()}><ArrowUp className="h-4 w-4" /></button>}
           </div>
