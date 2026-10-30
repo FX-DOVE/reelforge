@@ -142,7 +142,7 @@ export function Mascot({ size = 64, still, floating, onTap }: { size?: number; s
       style={{ ...style, touchAction: "none", WebkitTapHighlightColor: "transparent" }}
       className={`fixed z-[65] select-none bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-[#0071e3] rounded-3xl ${dragging ? "scale-110 cursor-grabbing" : "cursor-grab"}`}>
       {body}
-      <span className={`pointer-events-none absolute top-1 whitespace-nowrap rounded-2xl border border-black/5 bg-white/95 px-3 py-1.5 text-[13px] font-medium text-[#1d1d1f] shadow-[0_8px_24px_-8px_rgba(0,0,0,.25)] backdrop-blur transition-all duration-200 ${leftSide ? "left-full ml-1 origin-left" : "right-full mr-1 origin-right"} ${near && !dragging ? "scale-100 opacity-100" : "scale-75 opacity-0"}`}>Need a hand?</span>
+      <span className={`pointer-events-none absolute top-1 whitespace-nowrap rounded-2xl px-3 py-1.5 text-[13px] font-medium shadow-[0_8px_24px_-8px_rgba(0,0,0,.25)] backdrop-blur transition-all duration-200 ${leftSide ? "left-full ml-1 origin-left" : "right-full mr-1 origin-right"} ${near && !dragging ? "scale-100 opacity-100" : "scale-75 opacity-0"}`} style={{ background: "#fff", color: "#1d1d1f", border: "1px solid rgba(0,0,0,.06)" }}>Need a hand?</span>
     </button>
   );
 }
