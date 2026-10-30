@@ -176,16 +176,19 @@ export async function writeScript(p: Project, instruction: string) {
 /** One or two Muse passes that trim/extend the script until its estimated runtime is within ±10% of the target. */
 export async function fitLength(p: Project, script: string, onStep?: (t: string) => void) {
   const target = p.targetSec || autoLength(p); let est = estimateRuntime(script).sec;
-  for (let i = 0; i < 2 && llmLive() && Math.abs(est - target) > target * 0.1; i++) {
+  let best = { script, est };
+  for (let i = 0; i < 3 && llmLive() && Math.abs(est - target) > target * 0.1; i++) {
     const longer = est < target; onStep?.(`Script runs ~${fmtDur(est)}; ${longer ? "extending" : "tightening"} to ${fmtDur(target)}…`);
-    const b = budget(target), cur = estimateRuntime(script);
+    const b = budget(target), cur = estimateRuntime(script), ratio = target / Math.max(1, est);
+    const dW = Math.round(cur.words * (1 - ratio)), dA = Math.round(cur.actions * (1 - ratio));
+    const how = longer ? `ADD about ${-dW} spoken words and ${-dA} action beats that deepen the story (no filler)` : `CUT about ${dW} spoken words and ${dA} action beats (merge or drop the weakest lines; keep the hook, the turn and the ending)`;
     try {
-      const { data } = await structured<{ script: string }>(`You are a script editor. ${lengthBrief(target)} Keep the same story, title, characters, wardrobe and screenplay format; ${longer ? "add beats/lines that deepen the story (no filler)" : "cut or merge lines and scenes, keep the best beats, the hook and the ending"}. Return {"script": string}.`,
-        `Current script (${cur.words} spoken words, ${cur.actions} action beats, ${cur.scenes} scenes ≈ ${cur.sec}s). Target: ${b.words} spoken words, ${b.actions} action beats, ${b.scenes} scenes.\n\n${script}`, () => ({ script }), undefined, "director");
-      if (typeof data.script === "string" && data.script.trim().length > 40) { script = data.script; est = estimateRuntime(script).sec; }
+      const { data } = await structured<{ script: string }>(`You are a script editor. ${lengthBrief(target)} Keep the same story, title, characters, wardrobe and screenplay format; ${how}. Count carefully. Return {"script": string}.`,
+        `Current script: ${cur.words} spoken words, ${cur.actions} action beats, ${cur.scenes} scenes ≈ ${cur.sec}s — ${Math.round(Math.abs(1 - ratio) * 100)}% too ${longer ? "short" : "long"}. Target: ${b.words} spoken words, ${b.actions} action beats, ${b.scenes} scenes.\n\n${script}`, () => ({ script }), undefined, "director");
+      if (typeof data.script === "string" && data.script.trim().length > 40) { script = data.script; est = estimateRuntime(script).sec; if (Math.abs(est - target) < Math.abs(best.est - target)) best = { script, est }; }
     } catch { break; }
   }
-  return { script, estSec: est, targetSec: target };
+  return { script: best.script, estSec: best.est, targetSec: target };
 }
 
 // ───────────────────────── Assets ─────────────────────────

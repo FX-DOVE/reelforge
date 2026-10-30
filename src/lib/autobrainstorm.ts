@@ -92,8 +92,8 @@ async function execute(pid: string, prompt: string, ownerId: string) {
   p = db.getProject(pid)!;
   await step(pid, `Target length ${fmtDur(p.targetSec!)} · topic “${plan.topic}”`);
   // 2) the agent's own desktop: visible YouTube research + transcripts + Google facts (user can watch it live)
-  const rs = plan.desktop !== false ? startResearch({ goal: plan.topic, task: "topic", projectId: pid, ownerId, workspace: "main", maxSteps: 10, auto: true }) : null;
-  if (rs) { await upd(pid, (a) => { a.researchId = rs.id; }); await step(pid, "Working on Reel’s computer — browsing YouTube (tap the computer icon to watch)"); }
+  let rs = plan.desktop !== false ? startResearch({ goal: plan.topic, task: "topic", projectId: pid, ownerId, workspace: "main", maxSteps: 10, auto: true }) : null;
+  if (rs) { await upd(pid, (a) => { a.researchId = rs!.id; }); await step(pid, "Working on Reel’s computer — browsing YouTube (tap the computer icon to watch)"); }
   // 3) in parallel: more YouTube queries + web research
   for (const q of (plan.yt || []).slice(0, 4)) { await step(pid, `YouTube search: “${q}”`); await add(await ytSearch(q)); }
   const vids = all.filter((s) => s.kind === "youtube");
@@ -101,6 +101,8 @@ async function execute(pid: string, prompt: string, ownerId: string) {
   let tN = 0;
   for (const v of vids.slice(0, 6)) { const t = await ytTranscript(v.url!); if (t.length > 200) { tN++; notes.push(`TRANSCRIPT "${v.title}" (${v.meta?.slice(0, 80)}): ${t.slice(0, 2200)}`); await add([{ kind: "transcript", title: `Transcript: ${v.title}`, url: v.url, meta: `${t.split(" ").length} words` }]); } }
   await step(pid, `Read ${tN} transcript${tN === 1 ? "" : "s"}`);
+  // transcripts blocked server-side → the computer is genuinely needed: its browser reads them like a person would
+  if (!tN && !rs) { rs = startResearch({ goal: plan.topic, task: "topic", projectId: pid, ownerId, workspace: "main", maxSteps: 10, auto: true }); await upd(pid, (a) => { a.researchId = rs!.id; }); await step(pid, "Transcripts need a real browser — working on Reel’s computer (tap the computer icon to watch)"); }
   for (const q of (plan.web || []).slice(0, 3)) { await step(pid, `Web search: “${q}”`); await add(await webSearch(q)); }
   const webs = all.filter((s) => s.kind === "web").slice(0, 6);
   await step(pid, `Reading ${webs.length} web pages…`);
