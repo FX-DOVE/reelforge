@@ -1,4 +1,5 @@
 import { deskContext } from "./desk";
+import { claimDesk } from "./deskLease";
 import { runComputerUse } from "./computer";
 import { nanoid } from "nanoid";
 import type { Browser, BrowserContext, Page } from "playwright-core";
@@ -480,7 +481,8 @@ export function startResearch(o: { goal: string; task?: Task; url?: string; proj
       await log(s, null, `Boot virtual desktop (headless Chromium ${W}×${H}) — ${mode === "scripted" ? "demo scripted mode" : `agent: ${s.provider}`}`, undefined, "info");
       await youtubeApi(s);
       // Prefer the real desktop's Chromium so the user watches (and can take over) the same browser.
-      const dctx = await deskContext().catch(() => null); if (dctx) { s.onDesk = true; await log(s, null, "Using Reel’s computer (real Linux desktop Chromium)", undefined, "info"); }
+      const mine = s.ownerId ? await claimDesk(s.ownerId).then((c) => c.ok).catch(() => false) : false; // only on this account's own desktop
+      const dctx = mine ? await deskContext().catch(() => null) : null; if (dctx) { s.onDesk = true; await log(s, null, "Using Reel’s computer (real Linux desktop Chromium)", undefined, "info"); }
       const page = await (dctx || await profileContext()).newPage(); pages.set(s.id, page);
       if (s.task === "topic") {
         // fast, bounded pipeline; with a Meta key Muse Wonder first drives the desktop for a few steps (the user watches it live)

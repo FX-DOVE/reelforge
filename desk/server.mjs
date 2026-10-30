@@ -14,7 +14,7 @@ const W = 1280, H = 720, QV = +(process.env.DESK_QV || 6);
 const PROFILES = { sharp: { fps: 12, qv: 3 }, auto: { fps: +(process.env.DESK_FPS || 15), qv: QV }, fast: { fps: 20, qv: 11 }, low: { fps: 10, qv: 16 } };
 let profile = "auto", degraded = false, lastSwitch = 0;
 const prof = () => PROFILES[profile === "auto" && degraded ? "low" : profile];
-const HOME = process.env.DESK_HOME || path.join(process.cwd(), "data", "desk-home");
+let HOME = process.env.DESK_HOME || path.join(process.cwd(), "data", "desk-home");
 const CHROME = process.env.DESK_CHROME || "chromium";
 const CDP = +(process.env.DESK_CDP_PORT || 9333);
 const IDLE_MS = +(process.env.DESK_IDLE_MIN || 10) * 60000;
@@ -211,6 +211,9 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname === "/status") return json({ state, control, err, w: W, h: H, cdp: CDP });
     if (u.pathname === "/frame") { seen = Date.now(); if (!frame) { res.writeHead(204); return res.end(); } res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "no-store", "Content-Length": frame.length }); return res.end(frame); }
     if (req.method !== "POST") return json({ error: "not found" }, 404);
+    // account hand-over (called only by the app, which stores profiles outside this container)
+    if (u.pathname === "/export") return exportHome(res, u.searchParams.has("discard"));
+    if (u.pathname === "/import") return importHome(req, res);
     const o = await body(req); seen = Date.now();
     if (u.pathname === "/wake") { await wake(); return json({ state }); }
     if (u.pathname === "/sleep") { sleepNow(); return json({ state }); }
@@ -230,6 +233,29 @@ const server = http.createServer(async (req, res) => {
     json({ error: "not found" }, 404);
   } catch (e) { json({ error: e.message }, 500); }
 });
+/** Stop every desktop process, drop viewers and the clipboard, so nothing of one account leaks into the next. */
+function hardStop() {
+  shutdown(); state = "asleep"; frame = null; control = false; lastClip = "";
+  for (const c of clients) try { c.sock.destroy(); } catch {}
+  clients.clear();
+}
+const EXCL = ["./.cache", "./.config/chromium/*/Cache", "./.config/chromium/*/Code Cache", "./.config/chromium/*/GPUCache", "./.config/chromium/*/Service Worker/CacheStorage", "./.config/chromium/Singleton*", "./.config/chromium/*/DawnCache", "./.config/chromium/*/GrShaderCache", "./.config/chromium/ShaderCache"];
+async function wipeHome() { for (const f of fs.readdirSync(HOME)) fs.rmSync(path.join(HOME, f), { recursive: true, force: true }); }
+async function exportHome(res, discard) {
+  hardStop(); await new Promise((r) => setTimeout(r, 600));
+  res.writeHead(200, { "Content-Type": "application/gzip", "Cache-Control": "no-store" });
+  if (discard) { await wipeHome(); return res.end(); }
+  const t = spawn("tar", ["-czf", "-", "-C", HOME, ...EXCL.map((e) => "--exclude=" + e), "--warning=no-file-changed", "."], { stdio: ["ignore", "pipe", "ignore"] });
+  t.stdout.pipe(res, { end: false });
+  t.on("close", async () => { try { await wipeHome(); } catch {} res.end(); log("profile exported + wiped"); });
+}
+async function importHome(req, res) {
+  hardStop(); await wipeHome();
+  const t = spawn("tar", ["-xzf", "-", "-C", HOME, "--no-same-owner"], { stdio: ["pipe", "ignore", "ignore"] });
+  let n = 0; req.on("data", (d) => { n += d.length; t.stdin.write(d); });
+  req.on("end", () => { if (!n) { t.kill(); res.writeHead(200, { "Content-Type": "application/json" }); return res.end('{"ok":true,"fresh":true}'); } t.stdin.end(); });
+  t.on("close", (c) => { if (!n) return; res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: c === 0 })); log("profile imported", n); });
+}
 server.on("upgrade", upgrade);
 server.listen(PORT, process.env.DESK_HOST || "127.0.0.1", () => log(`desk on :${PORT} display ${DISP} home ${HOME}`));
 for (const s of ["SIGINT", "SIGTERM"]) process.on(s, () => { shutdown(); process.exit(0); });

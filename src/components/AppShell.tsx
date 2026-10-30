@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clapperboard, Shield, Globe, Settings } from "lucide-react";
+import { Clapperboard, Shield, Globe, Settings, LogOut } from "lucide-react";
+import { Avatar, logout } from "./ProfilePage";
 import { Logo } from "./ui";
 import { useEffect, useState } from "react";
 
@@ -10,10 +11,11 @@ const BASE_NAV = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 const ADMIN_NAV = { href: "/admin", label: "Admin", icon: Shield };
+type Me = { email: string; name?: string; avatar?: string | null; role: string };
 function useNav() {
-  const [admin, setAdmin] = useState(false);
-  useEffect(() => { fetch("/api/auth/me").then((r) => r.json()).then((j) => setAdmin(j.user?.role === "admin")).catch(() => {}); }, []);
-  return admin ? [...BASE_NAV, ADMIN_NAV] : BASE_NAV;
+  const [me, setMe] = useState<Me | null>(null);
+  useEffect(() => { fetch("/api/auth/me").then((r) => r.json()).then((j) => setMe(j.user)).catch(() => {}); }, []);
+  return { me, nav: me?.role === "admin" ? [...BASE_NAV, ADMIN_NAV] : BASE_NAV };
 }
 
 export function StatusPill() {
@@ -30,7 +32,7 @@ export function StatusPill() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const NAV = useNav();
+  const { me, nav: NAV } = useNav();
   return (
     <div className="min-h-dvh md:pl-[76px]">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[76px] flex-col items-center border-r border-white/[0.06] bg-ink-900/80 backdrop-blur py-4 md:flex">
@@ -46,13 +48,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <Link href="/?site" title="ReelForge website" className="mt-auto flex w-[60px] flex-col items-center gap-1 rounded-xl py-2.5 text-[10px] font-medium text-ink-500 hover:bg-white/[0.04] hover:text-white"><Globe className="h-5 w-5" />Website</Link>
+        <Link href="/profile" title={me ? `Profile · ${me.email}` : "Profile"} className={`mt-1 flex w-[60px] flex-col items-center gap-1 rounded-xl py-2 text-[10px] font-medium ${path.startsWith("/profile") ? "bg-white/[0.08] text-white" : "text-ink-400 hover:bg-white/[0.04] hover:text-white"}`}><Avatar me={me} size={26} />Profile</Link>
+        <button onClick={logout} title="Log out" className="mt-1 flex w-[60px] flex-col items-center gap-1 rounded-xl py-2 text-[10px] font-medium text-ink-500 hover:bg-white/[0.04] hover:text-white"><LogOut className="h-5 w-5" />Log out</button>
       </aside>
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-flow-col auto-cols-fr border-t border-white/[0.07] bg-ink-900/95 backdrop-blur md:hidden pb-safe">
-        {[...NAV, { href: "/?site", label: "Website", icon: Globe }].map((n) => {
+        {[...NAV, { href: "/profile", label: "Profile", icon: null }].map((n) => {
           const on = path.startsWith(n.href) || (n.href === "/dashboard" && path.startsWith("/studio"));
           return (
             <Link key={n.href} href={n.href} className={`flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium ${on ? "text-white" : "text-ink-400"}`}>
-              <n.icon className="h-5 w-5" />{n.label}
+              {n.icon ? <n.icon className="h-5 w-5" /> : <Avatar me={me} size={20} />}{n.label}
             </Link>
           );
         })}

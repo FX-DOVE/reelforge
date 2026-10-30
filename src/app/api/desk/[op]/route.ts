@@ -1,12 +1,28 @@
 import { desk, deskContext, deskContextIfUp } from "@/lib/desk";
 import { allSessions } from "@/lib/research";
+import { currentUser } from "@/lib/auth";
+import { claimDesk, deskBusyFor, deskOwner, touchDesk } from "@/lib/deskLease";
 export const dynamic = "force-dynamic";
 
 const pass = async (r: Response) => new Response(r.status === 204 ? null : await r.arrayBuffer(), { status: r.status, headers: { "Content-Type": r.headers.get("Content-Type") || "application/json", "Cache-Control": "no-store" } });
 const down = () => Response.json({ state: "unavailable", error: "The desktop service isn’t running." }, { status: 503 });
 
+const busy = (m: { error: string; minutes: number }) => Response.json({ state: "busy", error: m.error, minutes: m.minutes }, { status: 409 });
+/** Every desktop op is for the signed-in account's OWN leased desktop (see lib/deskLease). */
+async function gate(claim: boolean, force = false) {
+  const u = await currentUser(); if (!u) return Response.json({ error: "Please sign in." }, { status: 401 });
+  if (!claim) {
+    if (deskOwner() === u.id) { touchDesk(u.id); return u; }
+    const m = await deskBusyFor(u.id); if (m !== null) return busy({ error: `Reel’s computer is being used by another creator right now. It frees up in about ${m} min.`, minutes: m });
+    return { asleep: true } as const;
+  }
+  try { const c = await claimDesk(u.id, force && u.role === "admin"); return c.ok ? u : busy(c); } catch (e) { return Response.json({ state: "error", error: "Couldn’t switch the desktop to your account: " + (e as Error).message }, { status: 503 }); }
+}
 export async function GET(req: Request, { params }: { params: Promise<{ op: string }> }) {
   const { op } = await params;
+  const gt = await gate(op !== "status");
+  if (gt instanceof Response) return op === "status" && gt.status === 409 ? Response.json(await gt.json()) : gt;
+  if ("asleep" in gt) return Response.json({ state: "asleep", control: false }); // free: wake claims it for you
   if (op === "editable") {
     const u = new URL(req.url); const x = u.searchParams.get("x"), y = u.searchParams.get("y");
     return Response.json({ text: x !== null && y !== null ? await editableAt(Number(x), Number(y)) : await chromeEditable() });
@@ -17,7 +33,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ op: stri
 export async function POST(req: Request, { params }: { params: Promise<{ op: string }> }) {
   const { op } = await params; if (!["wake", "sleep", "control", "input", "browser"].includes(op)) return Response.json({ error: "not found" }, { status: 404 });
   const b = await req.json().catch(() => ({}));
-  if (op === "control") for (const s of allSessions()) if (s.status === "running" || s.status === "paused") s.control = !!b.on; // pause/resume the agent
+  if (op === "sleep" && deskOwner() !== (await currentUser())?.id) return Response.json({ state: "asleep" });
+  const gt = await gate(true, !!b.force); if (gt instanceof Response) return gt;
+  if (op === "control") for (const s of allSessions()) if (s.ownerId === (gt as { id: string }).id && (s.status === "running" || s.status === "paused")) s.control = !!b.on; // pause/resume the agent
   try {
     const r = await desk("/" + op, b, 20000);
     if (op === "input" && r.ok && (b.t === "click" || b.t === "up")) {

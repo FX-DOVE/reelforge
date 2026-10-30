@@ -7,7 +7,7 @@ export const DATA_DIR = path.resolve(process.env.DATA_DIR || "./data");
 export const MEDIA_DIR = path.join(DATA_DIR, "media");
 const DB_FILE = path.join(DATA_DIR, "db.json");
 
-export interface UserRec { id: string; email: string; name?: string; hash: string; role: "admin" | "user"; createdAt: string }
+export interface UserRec { id: string; email: string; name?: string; hash: string; role: "admin" | "user"; createdAt: string; verified?: boolean; tv?: number; avatar?: string }
 interface DBShape { projects: Record<string, Project>; settings: Record<string, string>; users?: Record<string, UserRec>; memory?: Record<string, UserMemory>; docs?: Record<string, Record<string, { id: string; ownerId: string; updatedAt?: string }>> }
 
 let cache: DBShape | null = null;
@@ -35,6 +35,7 @@ export const db = {
   },
   findUserByEmail(email: string) { return Object.values(load().users!).find((u) => u.email === email.toLowerCase()); },
   getUser(id: string) { return load().users![id]; },
+  async deleteUser(id: string) { return (chain = chain.then(() => { delete load().users![id]; delete load().memory![id]; persist(); })); },
   async saveUser(u: UserRec) { return (chain = chain.then(() => { load().users![u.id] = u; persist(); })); },
   getMemory(uid: string): UserMemory { return load().memory![uid] || { enabled: true, notes: [] }; },
   async setMemory(uid: string, fn: (m: UserMemory) => void) {

@@ -1,7 +1,7 @@
 /** Session token helpers shared by the Node server and the edge middleware (Web Crypto only). */
 import { jwtVerify } from "jose";
 export const COOKIE = "rf_session";
-export type SessionUser = { id: string; email: string; role: "admin" | "user"; name?: string };
+export type SessionUser = { id: string; email: string; role: "admin" | "user"; name?: string; tv?: number; verified?: boolean };
 let keyP: Promise<Uint8Array> | null = null;
 export function sessionKey(): Promise<Uint8Array> {
   return (keyP ??= (async () => {
@@ -14,6 +14,6 @@ export async function verifyToken(t: string | undefined): Promise<SessionUser | 
   try {
     const { payload } = await jwtVerify(t, await sessionKey());
     if (!payload.sub) return null;
-    return { id: String(payload.uid || payload.sub), email: String(payload.sub), role: payload.role === "admin" ? "admin" : "user", name: payload.name ? String(payload.name) : undefined };
+    return { id: String(payload.uid || payload.sub), email: String(payload.sub), role: payload.role === "admin" ? "admin" : "user", name: payload.name ? String(payload.name) : undefined, tv: Number(payload.tv || 0) };
   } catch { return null; }
 }

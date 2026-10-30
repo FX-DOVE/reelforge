@@ -5,12 +5,13 @@ import { H } from "@/lib/net";
 import { SleepScreen } from "./DeskApps";
 
 /** Reel's real Linux desktop (Xvfb + Openbox + Chromium), streamed as JPEG frames; input goes back over xdotool. */
-export type DeskState = "unavailable" | "asleep" | "starting" | "awake" | "error" | "loading";
+export type DeskState = "busy" | "unavailable" | "asleep" | "starting" | "awake" | "error" | "loading";
 export type InputMode = "mouse" | "touch";
 
 export function useDesk() {
   const [state, setState] = useState<DeskState>("loading");
   const [control, setControl] = useState(false);
+  const [busyMsg, setBusyMsg] = useState("");
   const local = useRef(0); // ignore polls that started before a local change
   useEffect(() => {
     let dead = false, t: ReturnType<typeof setTimeout>;
@@ -18,15 +19,15 @@ export function useDesk() {
       const t0 = Date.now();
       const r = await fetch("/api/desk/status", { headers: H, cache: "no-store" }).catch(() => null);
       const j = r ? await r.json().catch(() => null) : null;
-      if (dead) return; if (t0 > local.current) { setState(j?.state || "unavailable"); if (j && "control" in j) setControl(!!j.control); }
+      if (dead) return; if (t0 > local.current) { setState(j?.state || "unavailable"); setBusyMsg(j?.error || ""); if (j && "control" in j) setControl(!!j.control); }
       t = setTimeout(tick, 3000);
     };
     tick(); return () => { dead = true; clearTimeout(t); };
   }, []);
   const post = (op: string, b: unknown = {}) => fetch("/api/desk/" + op, { method: "POST", headers: H, body: JSON.stringify(b) }).then((r) => r.json()).catch(() => ({}));
-  const wake = async () => { local.current = Date.now(); setState("starting"); const j = await post("wake"); setState(j.state || "error"); };
+  const wake = async () => { local.current = Date.now(); setState("starting"); const j = await post("wake"); setState(j.state || "error"); setBusyMsg(j.error || ""); };
   const take = async (on: boolean) => { local.current = Date.now(); setControl(on); await post("control", { on }); local.current = Date.now(); };
-  return { state, control, wake, take, post, sleep: async () => { await post("sleep"); setState("asleep"); setControl(false); } };
+  return { state, busyMsg, control, wake, take, post, sleep: async () => { await post("sleep"); setState("asleep"); setControl(false); } };
 }
 
 const MODE_KEY = "rf-input-mode";
@@ -93,7 +94,7 @@ type Link = "connecting" | "live" | "reconnecting" | "http";
 const Q_KEY = "rf-desk-quality";
 
 export function RealDesk({ desk, mode }: { desk: ReturnType<typeof useDesk>; mode: InputMode }) {
-  const { state, control, wake, post } = desk;
+  const { state, busyMsg, control, wake, post } = desk;
   const [has, setHas] = useState(false);
   const [cur, setCur] = useState({ x: 0.5, y: 0.5 });
   const [glide, setGlide] = useState(false); // remote-driven cursor animates between samples; local input is instant
@@ -368,6 +369,7 @@ export function RealDesk({ desk, mode }: { desk: ReturnType<typeof useDesk>; mod
   const small = size.w < 300;
 
   if (state === "asleep" || state === "loading") return <div className="absolute inset-0"><SleepScreen onWake={wake} /></div>;
+  if (state === "busy") return <div className="absolute inset-0 grid place-items-center bg-black p-4 text-center text-xs text-ink-300"><div>{busyMsg || "Reel’s computer is being used by another creator right now."}<div className="mt-1 text-ink-500">Each account gets its own private desktop — yours opens as soon as it’s free.</div><button className="btn-outline mt-3 h-7 px-2 text-xs" onClick={wake}>Try again</button></div></div>;
   if (state === "starting") return <div className="absolute inset-0 grid place-items-center bg-black text-xs text-ink-400">Waking up Reel’s computer…</div>;
   if (state !== "awake") return <div className="absolute inset-0 grid place-items-center bg-black p-4 text-center text-xs text-ink-400">The desktop service isn’t running.<button className="btn-outline ml-2 h-7 px-2 text-xs" onClick={wake}>Retry</button></div>;
   const showCur = has && !mouseIn && (mode === "mouse" || control || glide);
