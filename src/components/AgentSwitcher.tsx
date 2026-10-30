@@ -37,7 +37,7 @@ export function AgentSwitcher({ open, onClose, agents, current, onPick, onNew, o
   const press = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startEdit = (a: AgentLite, fresh = false) => { setIsNew(fresh); setEdit(a); setF({ title: a.title, color: a.color || COLORS[0], topic: a.topic || "", bot: botFor(a.id, a.bot) }); };
   useEffect(() => { if (!open || !editId) return; const a = agents.find((x) => x.id === editId); if (a) { startEdit(a, true); onEdited?.(); } }, [open, editId, agents]); // eslint-disable-line react-hooks/exhaustive-deps
-  const save = async () => { if (!edit || !f.title.trim()) return; await call(`/api/chats/${edit.id}`, "PATCH", { title: f.title.trim().slice(0, 80), color: f.color, topic: f.topic.trim().slice(0, 200), bot: f.bot }); setEdit(null); await onChange(); };
+  const save = async () => { if (!edit || !f.title.trim()) return; await call(`/api/chats/${edit.id}`, "PATCH", { title: f.title.trim().slice(0, 80), color: f.color, topic: f.topic.trim().slice(0, 200), bot: f.bot }); const fresh = isNew; setEdit(null); setIsNew(false); await onChange(); if (fresh) onClose(); };
   const del = async () => { if (!edit || !confirm(`Delete “${edit.title}” and its history?`)) return; await call(`/api/chats/${edit.id}`, "DELETE"); if (edit.id === current) onPick(null); setEdit(null); await onChange(); };
   const close = () => { setEdit(null); onClose(); };
   const row = (a: AgentLite | null) => {
