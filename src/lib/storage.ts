@@ -28,7 +28,7 @@ const keyPath = (k: string) => k.split("/").map(enc).join("/");
 function signingKey(secret: string, date: string) { return hm(hm(hm(hm("AWS4" + secret, date), "auto"), "s3"), "aws4_request"); }
 
 /** SigV4 header-signed request to R2. */
-export async function r2Req(c: R2Conf, method: string, key: string, body?: Buffer, type?: string, query: Record<string, string> = {}) {
+export async function r2Req(c: R2Conf, method: string, key: string, body?: Buffer, type?: string, query: Record<string, string> = {}, extra: Record<string, string> = {}) {
   const u = new URL(`${c.endpoint}/${c.bucket}${key ? "/" + keyPath(key) : ""}`);
   const qs = Object.entries(query).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${enc(k)}=${enc(v)}`).join("&");
   const now = new Date(); const amz = now.toISOString().replace(/[-:]|\.\d{3}/g, ""); const date = amz.slice(0, 8);
@@ -40,7 +40,7 @@ export async function r2Req(c: R2Conf, method: string, key: string, body?: Buffe
   const sts = ["AWS4-HMAC-SHA256", amz, scope, h(creq)].join("\n");
   const sig = crypto.createHmac("sha256", signingKey(c.secret, date)).update(sts).digest("hex");
   const { host: _host, ...send } = headers; void _host;
-  return fetch(qs ? `${u.origin}${u.pathname}?${qs}` : u, { method, body: body ? new Uint8Array(body) : undefined, headers: { ...send, authorization: `AWS4-HMAC-SHA256 Credential=${c.key}/${scope}, SignedHeaders=${names.join(";")}, Signature=${sig}` }, signal: AbortSignal.timeout(30000) });
+  return fetch(qs ? `${u.origin}${u.pathname}?${qs}` : u, { method, body: body ? new Uint8Array(body) : undefined, headers: { ...extra, ...send, authorization: `AWS4-HMAC-SHA256 Credential=${c.key}/${scope}, SignedHeaders=${names.join(";")}, Signature=${sig}` }, signal: AbortSignal.timeout(body && body.length > 5e6 ? 600_000 : 30_000) });
 }
 /** Presigned GET URL (default 1 hour). */
 export function presign(c: R2Conf, key: string, expires = 3600) {
@@ -120,13 +120,13 @@ export function hydrateSync(rel: string, abs: string): boolean {
 /** Does R2 hold this media file? Returns its size, or null. */
 export async function r2Head(rel: string): Promise<{ size: number; etag: string } | null> {
   const c = r2Conf(); if (!c) return null;
-  const r = await r2Req(c, "HEAD", "media/" + rel); if (!r.ok) return null;
-  return { size: Number(r.headers.get("content-length") || -1), etag: (r.headers.get("etag") || "").replace(/"/g, "") };
+  const r = await r2Req(c, "HEAD", "media/" + rel, undefined, undefined, {}, { "accept-encoding": "identity" }); if (!r.ok) return null;
+  return { size: Number(r.headers.get("content-length") || -1), etag: (r.headers.get("etag") || "").replace(/^W\//, "").replace(/"/g, "") };
 }
 /** Stream a media file from R2 (range-aware) — used when it is no longer on local disk. */
 export async function r2Fetch(rel: string, range?: string | null): Promise<Response | null> {
   if (!r2Enabled()) return null;
-  const r = await fetch(presign({ ...r2Conf()!, publicBase: undefined }, "media/" + rel, 600), { headers: range ? { range } : {} });
+  const r = await fetch(presign({ ...r2Conf()!, publicBase: undefined }, "media/" + rel, 600), { headers: { "accept-encoding": "identity", ...(range ? { range } : {}) } });
   return r.ok || r.status === 206 || r.status === 416 ? r : null;
 }
 
