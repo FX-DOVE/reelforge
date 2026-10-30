@@ -9,7 +9,7 @@ import { GENRES, isGenre } from "@/lib/genres";
 
 export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
-const EDITABLE = ["title", "mode", "format", "aspect", "style", "customStyle", "outputType", "videoProvider", "idea", "script", "narratorVoice", "music", "subtitles", "filmStyle"] as const;
+const EDITABLE = ["title", "mode", "format", "aspect", "style", "customStyle", "outputType", "videoProvider", "idea", "script", "narratorVoice", "music", "subtitles", "filmStyle", "targetSec"] as const;
 
 export async function GET(_: Request, { params }: Ctx) {
   const g = await requireProject((await params).id); if (g instanceof Response) return g;

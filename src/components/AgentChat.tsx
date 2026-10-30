@@ -1,5 +1,6 @@
 "use client";
-import { showDesktop, openAgentDesktop } from "./DesktopWidget";
+import { openAgentDesktop } from "./DesktopWidget";
+import { useDeskWorking } from "./useDeskWorking";
 import { friendly, ndjson, resumeStream } from "@/lib/net";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -72,7 +73,7 @@ export function AgentChat({ projectId, onSession, className = "", starters, agen
           else if (e.type === "plan") push((x) => [...x, { k: "info", text: `Plan: ${e.steps.map((t: string) => LABEL[t] || t).join(" → ")}` }]);
           else if (e.type === "tool_end") push((x) => x.map((it) => it.k === "tool" && it.id === e.id ? { ...it, ok: e.ok, summary: e.summary } : it));
           else if (e.type === "research") setRjob({ id: e.id, topic: e.topic });
-          else if (e.type === "session") { showDesktop(e.id); onSession?.(e.id); }
+          else if (e.type === "session") { window.dispatchEvent(new Event("rf:desk-working")); onSession?.(e.id); }
           else if (e.type === "project") push((x) => [...x, { k: "info", text: `Created project “${e.title}” — /studio/${e.id}` }]);
           else if (e.type === "error") push((x) => [...x, { k: "info", text: "⚠ " + e.error }]);
           else if (e.type === "done" && e.projectId && !interrupting) router.refresh();
@@ -203,7 +204,7 @@ export function FloatingAgent() {
               <div className="min-w-0 leading-tight"><p className="flex items-center gap-1 text-[15px] font-semibold"><span className="truncate">{cur?.title || "Reel"}</span><ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${pick ? "rotate-180" : ""}`} /></p><p className="truncate text-xs text-ink-400">{cur ? (cur.topic || "Producer") : projectId ? "Working on this project" : "Producer · ReelForge Studio"}</p></div>
             </button>
             <button data-t="agent-new" aria-label="New agent" className="grid h-10 w-10 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white" onClick={newAgent}><Plus className="h-5 w-5" /></button>
-            <button data-t="agent-computer" aria-label="Open this agent’s computer" title="This agent’s computer" className="grid h-10 w-10 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white" onClick={() => openAgentDesktop(cur?.id || "main", cur?.title || "Reel")}><Monitor className="h-5 w-5" /></button>
+            <DeskButton ws={cur?.id || "main"} label={cur?.title || "Reel"} />
             <button aria-label={muted ? "Unmute sounds" : "Mute sounds"} className="grid h-10 w-10 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white" onClick={mute}>{muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</button>
             <button aria-label="Close" className="hidden h-10 w-10 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white md:grid" onClick={() => setOpen(false)}><X className="h-5 w-5" /></button>
           </div>
@@ -215,5 +216,17 @@ export function FloatingAgent() {
       </div>}
       {!open && <Mascot floating bot={cur ? botFor(cur.id, cur.bot) : undefined} onTap={() => setOpen(true)} />}
     </>
+  );
+}
+
+/** Computer button for an agent: opens only on tap; a pulsing dot + label shows when the agent is working on its computer. */
+export function DeskButton({ ws, label, big }: { ws: string; label: string; big?: boolean }) {
+  const working = useDeskWorking();
+  return (
+    <button data-t="agent-computer" aria-label={working ? `${label} is working on its computer — tap to watch` : `Open ${label}’s computer`} title={working ? "Working on computer — tap to watch" : `${label}’s computer`}
+      className={`relative flex h-10 items-center gap-1.5 rounded-full ${big ? "border border-white/10 px-3 text-xs" : "w-10 justify-center"} ${working ? "text-brand-300" : "text-ink-400"} hover:bg-white/5 hover:text-white`} onClick={() => openAgentDesktop(ws, label)}>
+      <Monitor className="h-5 w-5" />{big && <span>{working ? "Working — tap to watch" : "Computer"}</span>}
+      {working && <span className="absolute right-1.5 top-1.5 flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" /></span>}
+    </button>
   );
 }

@@ -1,4 +1,6 @@
 "use client";
+import { estimateRuntime, fmtDur } from "@/lib/runtime";
+import type { Project } from "@/lib/types";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Eye, FileUp, MessageSquareText, PenLine, Send, Pencil } from "lucide-react";
 import { classify } from "@/lib/screenplay";
@@ -14,6 +16,14 @@ const INSERTS = [
   { k: "Dialog", t: "\nCHARACTER\nLine of dialogue.\n" },
   { k: "Transition", t: "\nCUT TO:\n" },
 ];
+
+function RuntimeBadge({ p, text }: { p: Project; text: string }) {
+  const est = estimateRuntime(text).sec; const [t, setT] = useState(p.targetSec ? String(Math.round(p.targetSec / 6) / 10) : "");
+  useEffect(() => { setT(p.targetSec ? String(Math.round(p.targetSec / 6) / 10) : ""); }, [p.targetSec]);
+  const save = (v: string) => { const n = Math.round(parseFloat(v) * 60); if (n >= 10 && n <= 3600) fetch(`/api/projects/${p.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetSec: n }) }); };
+  const off = p.targetSec ? Math.abs(est - p.targetSec) / p.targetSec : 0;
+  return <span data-t="runtime" className="flex items-center gap-1.5">· est. runtime <b className={off > 0.1 ? "text-amber-300" : "text-emerald-300"}>{fmtDur(est)}</b> · target <input aria-label="Target minutes" className="w-12 rounded bg-white/[0.06] px-1 text-center" value={t} placeholder="auto" onChange={(e) => setT(e.target.value)} onBlur={(e) => save(e.target.value)} /> min</span>;
+}
 
 export function ScriptTab({ p, act, busy, toast, setP, openBrainstorm, next }: TabProps & { openBrainstorm?: boolean; next: () => void }) {
   const [text, setText] = useState(p.script);
@@ -91,6 +101,7 @@ export function ScriptTab({ p, act, busy, toast, setP, openBrainstorm, next }: T
           </div>
           <div className="mx-auto mt-4 flex w-full max-w-4xl flex-wrap items-center justify-between gap-2 text-xs text-ink-400">
             <span>{dirty ? "Saving…" : text ? `Saved · ${text.split(/\s+/).filter(Boolean).length} words · ${lines.filter((l) => l.type === "scene").length} scenes` : "Empty script"}</span>
+            {text && <RuntimeBadge p={p} text={text} />}
             <button className="btn-brand" disabled={!text.trim() || busy.has("extractAssets")} onClick={async () => { const r = await act("extractAssets"); if (r?.ok) next(); }}>
               {busy.has("extractAssets") ? <Spinner /> : <Pencil className="h-4 w-4" />} Extract cast & assets <ArrowRight className="h-4 w-4" />
             </button>

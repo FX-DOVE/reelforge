@@ -1,13 +1,14 @@
 // Per-agent desktop test: two agents in one account each get their own files + browser profile; another account stays blocked.
+// Sign-ups need email verification: set TEST_SIGNUP_TOKEN (same value as the server env) so test accounts on @test.reelforge.invalid are pre-verified and no mail is sent.
 // Usage: BASE=https://host SSH="ssh -i key root@host" node scripts/agent-desk-test.mjs   (cleans up its accounts)
 import { execSync } from "node:child_process";
 const BASE = process.env.BASE, SSH = process.env.SSH, H = "/home/reel/home";
 const sh = (c) => { try { return execSync(`${SSH} ${JSON.stringify(`docker exec reelforge-desk-1 sh -c ${JSON.stringify(c)}`)}`, { encoding: "utf8" }).trim(); } catch { return "ERR"; } };
 const results = []; let fails = 0; const ok = (n, p, i = "") => { results.push(`${p ? "PASS" : "FAIL"}  ${n}${i ? "  (" + i + ")" : ""}`); if (!p) fails++; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-function client() { let cookie = ""; return async (path, opt = {}) => { const r = await fetch(BASE + path, { redirect: "manual", ...opt, headers: { "Content-Type": "application/json", ...(cookie ? { cookie } : {}), ...(opt.headers || {}) } }); const sc = r.headers.get("set-cookie"); if (sc) { const m = sc.match(/rf_session=([^;]*)/); if (m) cookie = `rf_session=${m[1]}`; } const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = t.slice(0, 100); } return { s: r.status, j, cookie }; }; }
+function client() { let cookie = ""; return async (path, opt = {}) => { const r = await fetch(BASE + path, { redirect: "manual", ...opt, headers: { "Content-Type": "application/json", ...(process.env.TEST_SIGNUP_TOKEN ? { "x-rf-test": process.env.TEST_SIGNUP_TOKEN } : {}), ...(cookie ? { cookie } : {}), ...(opt.headers || {}) } }); const sc = r.headers.get("set-cookie"); if (sc) { const m = sc.match(/rf_session=([^;]*)/); if (m) cookie = `rf_session=${m[1]}`; } const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = t.slice(0, 100); } return { s: r.status, j, cookie }; }; }
 const st = Date.now(), pw = "Desk-test-" + st, A = client(), B = client();
-const ea = `desk-a+${st}@example.com`, eb = `desk-b+${st}@example.com`;
+const ea = `desk-a+${st}@test.reelforge.invalid`, eb = `desk-b+${st}@test.reelforge.invalid`;
 const sa = await A("/api/auth/signup", { method: "POST", body: JSON.stringify({ email: ea, password: pw, name: "Desk A", agree: true }) });
 const sb = await B("/api/auth/signup", { method: "POST", body: JSON.stringify({ email: eb, password: pw, name: "Desk B", agree: true }) });
 ok("sign up A and B", sa.s === 200 && sb.s === 200, `${sa.s}/${sb.s}`);

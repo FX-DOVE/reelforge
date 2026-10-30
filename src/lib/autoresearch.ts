@@ -19,7 +19,7 @@ export async function detectTopic(message: string, context = ""): Promise<string
   if (m.length < 12 || m.split(/\s+/).length < 3 || SMALL.test(m) || META.test(m) || FOLLOWUP.test(m)) return null;
   if (!llmLive()) return m.split(/\s+/).length >= 4 ? m.replace(/[?.!]+$/, "").slice(0, 80) : null;
   try {
-    const r = await chatP([{ role: "system", content: 'Decide if the user message names a CONCRETE video topic or idea worth researching on YouTube (a subject, story premise, product, event, place, person, niche). Small talk, app questions, requests to tweak an existing idea ("make it darker"), or vague asks ("give me ideas") are NOT. Reply JSON {"topic": <2-6 word YouTube search query for the topic> | null}.' }, { role: "user", content: `${context ? `Project context: ${context}\n` : ""}Message: ${m.slice(0, 600)}` }], { json: true, temperature: 0 });
+    const r = await chatP([{ role: "system", content: 'Decide if the user is ASKING for research or for a video/film ABOUT a concrete topic that needs outside information (a subject, story premise, product, event, place, niche) — i.e. the computer is genuinely needed. Opinions, preferences or tool mentions ("I love Descript, use it"), small talk, app questions, requests to tweak an existing idea ("make it darker"), or vague asks ("give me ideas") are NOT. Reply JSON {"topic": <2-6 word YouTube search query for the topic> | null}.' }, { role: "user", content: `${context ? `Project context: ${context}\n` : ""}Message: ${m.slice(0, 600)}` }], { json: true, temperature: 0 });
     const t = parseJson<{ topic?: string | null }>(r.text).topic;
     return t && typeof t === "string" && t.trim().length > 2 ? t.trim().slice(0, 80) : null;
   } catch { return null; }

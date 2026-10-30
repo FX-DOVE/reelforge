@@ -1,7 +1,10 @@
 "use client";
 import { friendly, ndjson, resumeStream } from "@/lib/net";
 import { useEffect, useRef, useState } from "react";
-import { Check, FileText, Lightbulb, MessageSquareText, NotebookPen, RotateCcw, Send, Clapperboard, Square, X } from "lucide-react";
+import { Check, FileText, Lightbulb, MessageSquareText, Monitor, NotebookPen, RotateCcw, Send, Clapperboard, Square, X, PlayCircle, Globe, Captions, Loader2, CircleAlert } from "lucide-react";
+import { openAgentDesktop } from "../DesktopWidget";
+import { DeskButton } from "../AgentChat";
+import type { AutoRun } from "@/lib/types";
 import type { ChatMsg, Idea, Project } from "@/lib/types";
 import { Spinner } from "../ui";
 import type { Act } from "./common";
@@ -9,10 +12,35 @@ import { autoResearchPref, setAutoResearchPref } from "@/lib/autopref";
 import { ResearchBar, type ResearchJob } from "../ResearchBar";
 
 const STARTERS: Record<string, string[]> = {
-  drama: ["Pitch 3 Nollywood family-drama hooks for Shorts", "A betrayal story with a twist in the last 5 seconds", "Give me a romance with a ticking clock"],
-  documentary: ["3 angles for a doc about Lagos danfo drivers", "A history mystery most people get wrong", "Turn my research notes into a doc outline"],
-  ad: ["Hooks for a budget smartwatch ad on TikTok", "Problem → solution ad for a skincare brand", "A funny 15s ad for a food delivery app"],
+  drama: ["A Nollywood family drama about a hidden inheritance", "A betrayal story with a twist in the last 5 seconds", "A romance with a ticking clock at a Lagos wedding"],
+  documentary: ["A doc about Lagos danfo drivers", "A history mystery most people get wrong", "How jollof rice became a rivalry"],
+  ad: ["A budget smartwatch ad for TikTok", "Problem → solution ad for a skincare brand", "A funny ad for a food delivery app"],
 };
+const LENGTHS: [string, string][] = [["auto", "Let AI decide"], ["30", "30s"], ["60", "1 min"], ["120", "2 min"], ["180", "3 min"], ["300", "5 min"], ["600", "10 min"], ["custom", "Custom…"]];
+const fmt = (s: number) => s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${s % 60 ? ` ${s % 60}s` : ""}`;
+const SRC_ICON = { youtube: PlayCircle, transcript: Captions, web: Globe, desktop: Monitor } as const;
+
+/** Live progress of the autonomous research → script run (polls; survives refresh because state lives on the project). */
+function AutoPanel({ a, onRetry }: { a: AutoRun; onRetry: () => void }) {
+  const [showSrc, setShowSrc] = useState(false);
+  const counts = a.sources.reduce<Record<string, number>>((m, x) => ((m[x.kind] = (m[x.kind] || 0) + 1), m), {});
+  return (
+    <div data-t="auto-panel" className="mr-2 space-y-2.5 rounded-2xl border border-brand-400/25 bg-brand-500/[0.06] p-3.5 text-sm">
+      <div className="flex items-center gap-2">
+        {a.status === "running" ? <Loader2 className="h-4 w-4 animate-spin text-brand-400" /> : a.status === "done" ? <Check className="h-4 w-4 text-emerald-400" /> : <CircleAlert className="h-4 w-4 text-rose-400" />}
+        <p className="font-medium text-white">{a.status === "running" ? "Researching & writing your film" : a.status === "done" ? "Script ready" : "Run stopped"}</p>
+        {a.targetSec ? <span className="badge ml-auto bg-white/[0.06] text-ink-300">target {fmt(a.targetSec)}{a.estSec ? ` · est. ${fmt(a.estSec)}` : ""}</span> : null}
+      </div>
+      {a.status === "running" && a.researchId && <button className="btn-outline h-8 w-full text-xs" onClick={() => openAgentDesktop("main", "Reel")}><Monitor className="h-3.5 w-3.5" />Watch Reel research on its computer</button>}
+      <ol className="max-h-56 space-y-1 overflow-y-auto text-xs text-ink-300">{a.steps.map((x, i) => <li key={i} className="flex gap-2"><span className={i === a.steps.length - 1 && a.status === "running" ? "text-brand-400" : "text-emerald-400"}>{i === a.steps.length - 1 && a.status === "running" ? "●" : "✓"}</span><span>{x.text}</span></li>)}</ol>
+      {a.error && <p className="text-xs text-rose-300">{a.error} <button className="underline" onClick={onRetry}>Retry</button></p>}
+      <button className="flex w-full items-center gap-2 text-left text-xs text-ink-400 hover:text-white" onClick={() => setShowSrc(!showSrc)}>
+        <span className="font-medium text-ink-200">{a.sources.length} sources</span>{Object.entries(counts).map(([k, n]) => <span key={k}>· {n} {k}</span>)}<span className="ml-auto">{showSrc ? "Hide" : "Show"}</span>
+      </button>
+      {showSrc && <ul data-t="sources" className="max-h-72 space-y-1.5 overflow-y-auto">{a.sources.map((x, i) => { const I = SRC_ICON[x.kind]; return <li key={i} className="flex gap-2 text-xs"><I className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-500" /><span className="min-w-0">{x.url ? <a href={x.url} target="_blank" rel="noreferrer" className="text-ink-200 hover:underline">{x.title}</a> : <span className="text-ink-200">{x.title}</span>}{x.meta && <span className="block truncate text-ink-500">{x.meta}</span>}</span></li>; })}</ul>}
+    </div>
+  );
+}
 
 /** Tiny safe markdown: headings, bullets, bold/italic, code. */
 function Md({ text }: { text: string }) {
@@ -60,6 +88,26 @@ export function Brainstorm({ p, setP, act, toast, open, onScript }: { p: Project
   const [rjob, setRjobS] = useState<ResearchJob | null>(null);
   const setRjob = (j: ResearchJob | null) => { setRjobS(j); try { if (j) sessionStorage.setItem(RK, JSON.stringify(j)); else sessionStorage.removeItem(RK); } catch { /* */ } };
   useEffect(() => { try { const j = sessionStorage.getItem(RK); if (j) setRjobS(JSON.parse(j)); } catch { /* */ } }, [RK]);
+  const [auto, setAuto] = useState<AutoRun | null>(p.auto || null);
+  const [len, setLen] = useState<string>(p.targetSec ? String(p.targetSec) : "auto"); const [custom, setCustom] = useState("");
+  const lastPrompt = useRef("");
+  useEffect(() => { setAuto(p.auto || null); }, [p.auto]);
+  useEffect(() => {
+    if (auto?.status !== "running") return;
+    const t = setInterval(async () => { const r = await fetch(`/api/projects/${p.id}/auto`); if (!r.ok) return; const j = await r.json(); setAuto(j.auto); if (j.auto?.status !== "running") { clearInterval(t); reload(); if (j.auto?.status === "done") { toast("Your script is ready — edit anything you like"); onScript(); } } }, 2500);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto?.status, p.id]);
+  const startAuto = async (text = msg) => {
+    if (!text.trim() || auto?.status === "running") return;
+    const length = len === "auto" ? "auto" : len === "custom" ? Math.round(parseFloat(custom || "0") * 60) : Number(len);
+    if (len === "custom" && !(Number(length) >= 10)) { toast("Enter the custom length in minutes", true); return; }
+    lastPrompt.current = text; setMsg("");
+    const r = await fetch(`/api/projects/${p.id}/auto`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: text, length }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { toast(j.error || "Couldn’t start", true); setMsg(text); return; }
+    setAuto(j.auto); reload();
+  };
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [p.brainstorm.length, live?.text]);
 
@@ -110,9 +158,9 @@ export function Brainstorm({ p, setP, act, toast, open, onScript }: { p: Project
   return (
     <aside className={`${open ? "flex" : "hidden"} xl:flex min-h-[520px] w-full flex-col border-t border-white/[0.06] bg-ink-900/60 xl:sticky xl:top-0 xl:h-dvh xl:w-[420px] xl:border-l xl:border-t-0`}>
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] px-4 xl:pr-16">
-        <MessageSquareText className="h-4 w-4 text-brand-400" /><span className="text-sm font-semibold">Brainstorm</span>
+        <MessageSquareText className="h-4 w-4 text-brand-400" /><span className="text-sm font-semibold">Brainstorm with AI</span>
         <span className="badge bg-white/[0.06] text-ink-300 capitalize">{p.mode === "ad" ? "Product ad" : p.mode}</span>
-        <button onClick={() => window.dispatchEvent(new CustomEvent("rf:chat", { detail: { text: `Research on your computer for "${p.title}": ` } }))} className="ml-auto flex items-center gap-1 text-[11px] text-ink-400 hover:text-white" title="Ask Reel to research on its computer — notes attach here"><NotebookPen className="h-3.5 w-3.5" />Ask Reel to research</button>
+        <span className="ml-auto"><DeskButton ws="main" label="Reel" big /></span>
         {shown.length > 0 && <button className=" text-ink-400 hover:text-white" title="Clear conversation" onClick={async () => { if (confirm("Clear this brainstorm conversation?")) { await act("clearBrainstorm", {}, { quiet: true }); } }}><RotateCcw className="h-4 w-4" /></button>}
       </div>
       {research.length > 0 && (
@@ -124,15 +172,15 @@ export function Brainstorm({ p, setP, act, toast, open, onScript }: { p: Project
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {shown.length === 0 && !live && (
           <div className="space-y-3">
-            <p className="text-sm text-ink-400">Throw out a topic, feeling or half-idea. ReelForge pitches loglines, hooks, beat sheets and characters as cards — pick one and it writes the full script.{research.length ? " Your research notes are included as context." : ""}</p>
-            <div className="flex flex-col gap-1.5">{(STARTERS[p.mode] || STARTERS.drama).map((s) => <button key={s} className="chip justify-start text-left" onClick={() => send(s)}><Clapperboard className="h-3 w-3 shrink-0" />{s}</button>)}</div>
+            <p className="text-sm text-ink-400">Describe the film you want. Reel researches it on its own — YouTube (top similar videos, titles, transcripts), the web and its computer’s browser — then writes one complete script with characters, wardrobe and props, sized to your length. You can edit everything after.</p>
+            <div className="flex flex-col gap-1.5">{(STARTERS[p.mode] || STARTERS.drama).map((s) => <button key={s} className="chip justify-start text-left" onClick={() => startAuto(s)}><Clapperboard className="h-3 w-3 shrink-0" />{s}</button>)}</div>
           </div>
         )}
         {shown.map((m, i) => m.kind === "research" ? (
           <div key={i} className="mr-2 space-y-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] px-3.5 py-2.5 text-sm leading-relaxed text-ink-300">
             <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-emerald-300"><NotebookPen className="h-3 w-3" />Research from Reel’s computer</p>
             <Md text={m.content} />
-            {i === shown.length - 1 && !live && <button className="chip" onClick={() => send("Using that research, pitch 3 ideas with strong hooks.")}><Clapperboard className="h-3 w-3" />Pitch ideas from this research</button>}
+            
           </div>
         ) : m.kind === "note" ? (
           <p key={i} className="text-center text-[11px] text-emerald-300/80">{m.content}</p>
@@ -150,18 +198,21 @@ export function Brainstorm({ p, setP, act, toast, open, onScript }: { p: Project
             
           </div>
         )}
+        {auto && <AutoPanel a={auto} onRetry={() => startAuto(auto.prompt)} />}
         {rjob && <ResearchBar job={rjob} onDone={(st) => { setRjob(null); reload(); if (st === "done") toast("Research added to the brainstorm"); }} />}
         {writing && <div className="flex items-center gap-2 text-xs text-ink-400"><Spinner />Writing the full screenplay…</div>}
         <div ref={end} />
       </div>
       <div className="border-t border-white/[0.06] p-3">
-        <label className="mb-2 flex w-fit cursor-pointer items-center gap-1.5 text-[11px] text-ink-400" title="When you name a concrete topic, Reel researches it on YouTube on its computer (once per topic)">
-          <input type="checkbox" className="accent-brand-500" checked={autoR} onChange={(e) => { setAutoR(e.target.checked); setAutoResearchPref(e.target.checked); }} />Auto-research topics on YouTube
-        </label>
+        <div className="mb-2 flex flex-wrap items-center gap-1.5" data-t="length">
+          <span className="text-[11px] text-ink-400">Length</span>
+          {LENGTHS.map(([v, l]) => <button key={v} className={`rounded-full px-2.5 py-1 text-[11px] ${len === v ? "bg-brand-500 text-white" : "bg-white/[0.06] text-ink-300 hover:text-white"}`} onClick={() => setLen(v)}>{l}</button>)}
+          {len === "custom" && <input className="input h-7 w-20 px-2 text-xs" inputMode="decimal" placeholder="minutes" value={custom} onChange={(e) => setCustom(e.target.value)} />}
+        </div>
         <div className="flex gap-2">
-          <textarea rows={1} className="input min-h-10 resize-none py-2.5" placeholder="Brainstorm an idea…" value={msg} onChange={(e) => setMsg(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
+          <textarea rows={1} className="input min-h-10 resize-none py-2.5" placeholder="e.g. a 3 minute Nollywood drama about a hidden will…" value={msg} onChange={(e) => setMsg(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); startAuto(); } }} />
           {live ? <button className="btn-outline h-10 w-10 px-0" onClick={() => { abort.current?.abort(); setLive(null); }} aria-label="Stop"><Square className="h-4 w-4" /></button>
-            : <button className="btn-primary h-10 w-10 px-0" onClick={() => send()} disabled={!msg.trim()} aria-label="Send"><Send className="h-4 w-4" /></button>}
+            : <button className="btn-primary h-10 w-10 px-0" onClick={() => startAuto()} disabled={!msg.trim() || auto?.status === "running"} aria-label="Send"><Send className="h-4 w-4" /></button>}
         </div>
       </div>
     </aside>

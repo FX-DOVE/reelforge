@@ -100,6 +100,10 @@ export interface Project {
   /** Video mode: provider id from Admin → Video providers ("auto" = fallback order) */
   videoProvider?: string;
   idea: string;
+  /** target runtime in seconds (user picked or parsed from the prompt); undefined = let AI decide */
+  targetSec?: number;
+  /** autonomous brainstorm → research → script run (persisted, survives refresh) */
+  auto?: AutoRun;
   script: string;
   brainstorm: ChatMsg[];
   research?: ResearchNote[];
@@ -138,3 +142,6 @@ export function aspectSize(a: Aspect, long = 1280): { w: number; h: number } {
   if (x >= y) return { w: long, h: Math.round((long * y) / x / 2) * 2 };
   return { w: Math.round((long * x) / y / 2) * 2, h: long };
 }
+
+export interface AutoSource { kind: "youtube" | "web" | "transcript" | "desktop"; title: string; url?: string; meta?: string }
+export interface AutoRun { id: string; prompt: string; status: "running" | "done" | "error"; step: string; steps: { at: string; text: string }[]; sources: AutoSource[]; researchId?: string; targetSec?: number; estSec?: number; startedAt: string; finishedAt?: string; error?: string; provider?: string }

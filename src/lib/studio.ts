@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { db, mediaPath, mediaUrl, projectMediaDir } from "./db";
+import { autoLength, budget, estimateRuntime, fmtDur, lengthBrief } from "./runtime";
 import { generateImage, llmLive, structured, visionCheck } from "./providers/meta";
 import { cropBoxes, samBoxes, samOn } from "./providers/sam";
 import { getConfig, llmLabel } from "./config";
@@ -28,7 +29,7 @@ export function genreFor(p: Project): GenreSkill | undefined {
 /** Shared context for every agent: mode, format, look, the genre skill slice for this agent, then the user's learned taste on top. */
 function ctx(p: Project, purpose: "director" | "script" = "director", skill?: GenrePurpose) {
   const g = skill && genreFor(p);
-  return `Mode: ${MODES[p.mode]}. Format: ${FORMATS[p.format].label} (${p.aspect}, max ${FORMATS[p.format].maxSec}s). Visual style: ${styleText(p)}.${g ? `\n\n${genreBrief(g, skill!)}\n\n` : ""}${memoryBrief(p.ownerId, purpose)}${g ? "\n(The user's learned preferences above override the genre defaults where they conflict.)" : ""}`;
+  return `Mode: ${MODES[p.mode]}. Format: ${FORMATS[p.format].label} (${p.aspect}, platform max ${FORMATS[p.format].maxSec}s). ${lengthBrief(p.targetSec || autoLength(p))} Visual style: ${styleText(p)}.${g ? `\n\n${genreBrief(g, skill!)}\n\n` : ""}${memoryBrief(p.ownerId, purpose)}${g ? "\n(The user's learned preferences above override the genre defaults where they conflict.)" : ""}`;
 }
 
 /** Muse Spark picks the film style from the idea + brainstorm (+ the user's learned taste) unless the user chose one. */
@@ -151,7 +152,7 @@ export async function writeScript(p: Project, instruction: string) {
   if (!hasScript) { await pickGenre(p, instruction); p = db.getProject(p.id) || p; }
   const g = genreFor(p);
   const { data, source } = await structured<{ title: string; script: string }>(
-    `You are an award-winning screenwriter for an AI movie studio. ${ctx(p, "script", "script")} Write in standard screenplay format: a first line "TITLE: ...", scene headings (INT./EXT. LOCATION - TIME), action lines, CHARACTER names in caps on their own line, optional (parentheticals), dialogue, and transitions like CUT TO:. ${p.mode !== "drama" ? "Use NARRATOR for voiceover lines." : ""} ${voiceWritingNote(p)} Describe characters vividly on first appearance (age, face, hair, skin tone, wardrobe colours, makeup, accessories) so continuity can be tracked. Keep runtime within the format limit.${g ? ` Follow the FILM STYLE SKILL: its beat structure, archetypes, dialogue voice and pacing. Dialogue lines: one speaker each, 4–14 words, no parentheticals inside lines.` : ""} Never use existing film titles, franchise names, characters or real people. Return {"title": string, "script": string}.`,
+    `You are an award-winning screenwriter for an AI movie studio. ${ctx(p, "script", "script")} Write in standard screenplay format: a first line "TITLE: ...", scene headings (INT./EXT. LOCATION - TIME), action lines, CHARACTER names in caps on their own line, optional (parentheticals), dialogue, and transitions like CUT TO:. ${p.mode !== "drama" ? "Use NARRATOR for voiceover lines." : ""} ${voiceWritingNote(p)} Describe characters vividly on first appearance (age, face, hair, skin tone, wardrobe colours, makeup, accessories) so continuity can be tracked. Hit the TARGET RUNTIME budget (count your spoken words).${g ? ` Follow the FILM STYLE SKILL: its beat structure, archetypes, dialogue voice and pacing. Dialogue lines: one speaker each, 4–14 words, no parentheticals inside lines.` : ""} Never use existing film titles, franchise names, characters or real people. Return {"title": string, "script": string}.`,
     hasScript ? `Current script:\n${p.script}\n\nRevise it according to: ${instruction || "tighten and improve it"}` : `Idea: ${instruction || p.idea}${p.brainstorm.length ? `\n\nBrainstorm notes:\n${p.brainstorm.slice(-6).map((m) => m.content).join("\n")}` : ""}${(p.research || []).length ? `\n\nResearch notes:\n${(p.research || []).slice(-2).map((r) => r.notes.slice(0, 1500)).join("\n---\n")}` : ""}`,
     () => {
       if (hasScript) {
@@ -166,9 +167,25 @@ export async function writeScript(p: Project, instruction: string) {
   const sv = data as unknown as Record<string, unknown>;
   const script = [sv.script, sv.screenplay, sv.text, sv.content].find((v) => typeof v === "string" && v.trim().length > 40) as string | undefined;
   if (!script) throw new Error("The AI returned no script text — try again");
-  data.script = script;
-  await db.update(p.id, (x) => { x.script = script; if (data.title && (x.title === "Untitled project" || !x.title)) x.title = data.title; });
+  data.script = (await fitLength(p, script)).script;
+  const finalScript = data.script;
+  await db.update(p.id, (x) => { x.script = finalScript; if (data.title && (x.title === "Untitled project" || !x.title)) x.title = data.title; });
   return { source };
+}
+
+/** One or two Muse passes that trim/extend the script until its estimated runtime is within ±10% of the target. */
+export async function fitLength(p: Project, script: string, onStep?: (t: string) => void) {
+  const target = p.targetSec || autoLength(p); let est = estimateRuntime(script).sec;
+  for (let i = 0; i < 2 && llmLive() && Math.abs(est - target) > target * 0.1; i++) {
+    const longer = est < target; onStep?.(`Script runs ~${fmtDur(est)}; ${longer ? "extending" : "tightening"} to ${fmtDur(target)}…`);
+    const b = budget(target), cur = estimateRuntime(script);
+    try {
+      const { data } = await structured<{ script: string }>(`You are a script editor. ${lengthBrief(target)} Keep the same story, title, characters, wardrobe and screenplay format; ${longer ? "add beats/lines that deepen the story (no filler)" : "cut or merge lines and scenes, keep the best beats, the hook and the ending"}. Return {"script": string}.`,
+        `Current script (${cur.words} spoken words, ${cur.actions} action beats, ${cur.scenes} scenes ≈ ${cur.sec}s). Target: ${b.words} spoken words, ${b.actions} action beats, ${b.scenes} scenes.\n\n${script}`, () => ({ script }), undefined, "director");
+      if (typeof data.script === "string" && data.script.trim().length > 40) { script = data.script; est = estimateRuntime(script).sec; }
+    } catch { break; }
+  }
+  return { script, estSec: est, targetSec: target };
 }
 
 // ───────────────────────── Assets ─────────────────────────

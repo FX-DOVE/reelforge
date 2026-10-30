@@ -12,7 +12,7 @@ export function ResearchBar({ job, onDone, autoOpen = true }: { job: ResearchJob
   const [stopping, setStopping] = useState(false);
   const since = useRef(0); const done = useRef(onDone); done.current = onDone;
   useEffect(() => {
-    if (autoOpen) showDesktop(job.id);
+    if (autoOpen) window.dispatchEvent(new Event("rf:desk-working")); // never force the panel open: the computer icon shows "working — tap to watch"
     let alive = true; since.current = 0;
     const tick = async () => {
       while (alive) {

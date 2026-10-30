@@ -1,22 +1,23 @@
 // Two-account isolation test. Usage: BASE=https://host node scripts/isolation-test.mjs   (cleans up its accounts)
+// Sign-ups need email verification: set TEST_SIGNUP_TOKEN (same value as the server env) so test accounts on @test.reelforge.invalid are pre-verified and no mail is sent.
 const BASE = process.env.BASE || "http://localhost:3999";
 const stamp = Date.now(), results = []; let fails = 0;
 const ok = (name, pass, info = "") => { results.push(`${pass ? "PASS" : "FAIL"}  ${name}${info ? "  (" + info + ")" : ""}`); if (!pass) fails++; };
 function client() {
   let cookie = "";
   return async (path, opt = {}) => {
-    const r = await fetch(BASE + path, { redirect: "manual", ...opt, headers: { "Content-Type": "application/json", ...(cookie ? { cookie } : {}), ...(opt.headers || {}) } });
+    const r = await fetch(BASE + path, { redirect: "manual", ...opt, headers: { "Content-Type": "application/json", ...(process.env.TEST_SIGNUP_TOKEN ? { "x-rf-test": process.env.TEST_SIGNUP_TOKEN } : {}), ...(cookie ? { cookie } : {}), ...(opt.headers || {}) } });
     const sc = r.headers.get("set-cookie"); if (sc) { const m = sc.match(/rf_session=([^;]*)/); if (m) cookie = m[1] ? `rf_session=${m[1]}` : ""; }
     let j = null; const t = await r.text(); try { j = JSON.parse(t); } catch { j = t.slice(0, 120); }
     return { s: r.status, j };
   };
 }
 const A = client(), B = client(), pw = "Iso-test-" + stamp;
-const ea = `iso-a+${stamp}@example.com`, eb = `iso-b+${stamp}@example.com`;
+const ea = `iso-a+${stamp}@test.reelforge.invalid`, eb = `iso-b+${stamp}@test.reelforge.invalid`;
 const su = async (c, e, n) => (await c("/api/auth/signup", { method: "POST", body: JSON.stringify({ email: e, password: pw, name: n, agree: true }) }));
 const ra = await su(A, ea, "Iso A"), rb = await su(B, eb, "Iso B");
 ok("sign up A and B", ra.s === 200 && rb.s === 200, `${ra.s}/${rb.s}${ra.j?.verify ? " verify-required" : ""}`);
-if (ra.j?.verify) { console.log("Email verification is on — run against a server without email, or verify manually."); process.exit(2); }
+if (ra.j?.verify) { console.log("Email verification is on — set TEST_SIGNUP_TOKEN to the server's value."); process.exit(2); }
 const pa = await A("/api/projects", { method: "POST", body: JSON.stringify({ title: "A secret film", mode: "drama" }) });
 const pid = pa.j?.id; ok("A creates a project", !!pid, String(pa.s));
 const ag = await A("/api/chats", { method: "POST", body: JSON.stringify({ title: "A agent" }) });

@@ -17,6 +17,7 @@ export const appUrl = () => (getConfig("APP_URL") || process.env.APP_URL || "htt
 export async function sendMail(m: Mail): Promise<{ ok: boolean; id?: string; error?: string; skipped?: boolean }> {
   const prov = emailProvider(), from = getConfig("EMAIL_FROM");
   if (!prov || !from) { console.log(`[email] not configured — skipped "${m.subject}"`); return { ok: false, skipped: true, error: "Email isn’t set up yet." }; }
+  if (/\.invalid$/i.test(String(m.to || ""))) return { ok: false, skipped: true, error: "reserved test address" };
   try {
     if (prov === "resend") {
       const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${getConfig("RESEND_API_KEY")}`, "Content-Type": "application/json" }, body: JSON.stringify({ from, to: [m.to], subject: m.subject, html: m.html, text: m.text }), signal: AbortSignal.timeout(15000) });
