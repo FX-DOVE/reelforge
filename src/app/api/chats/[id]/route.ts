@@ -18,4 +18,4 @@ export async function PATCH(req: Request, { params }: P) {
   if (Array.isArray(b.agentIds)) c.agentIds = b.agentIds.filter((x: string) => agents.get(x, u.id)).slice(0, 8);
   return NextResponse.json({ chat: await chats.save(c) });
 }
-export async function DELETE(_: Request, { params }: P) { const u = await requireUser(); if (u instanceof Response) return u; const c = chats.get((await params).id, u.id); if (!c) return nf(); stopChat(c); await db.delDoc("chats", c.id); return NextResponse.json({ ok: true }); }
+export async function DELETE(_: Request, { params }: P) { const u = await requireUser(); if (u instanceof Response) return u; const c = chats.get((await params).id, u.id); if (!c) return nf(); stopChat(c); await db.delDoc("chats", c.id); void import("@/lib/deskLease").then((m) => m.releaseDesk(u.id, true, c.id)).catch(() => {}); return NextResponse.json({ ok: true }); }

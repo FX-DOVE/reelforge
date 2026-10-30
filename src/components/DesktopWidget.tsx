@@ -9,6 +9,11 @@ import { ArrowLeft, ArrowRight, MessageCircle, Hand, Maximize2, Minimize2, Minus
 /** App-wide "computer" widget: the agent's live virtual desktop in a floating window (Grok-style). */
 type Sess = { id: string; status: string; mode: string; control?: boolean; needsUser?: string; screen?: string; pageUrl?: string; goal: string; maxSteps: number; steps: { action: string; kind: string }[] };
 const KEY = "opie-desk";
+/** Open the computer from inside an agent: switches it to that agent's own workspace (ws = chat id, or "main" for Reel). */
+export const openAgentDesktop = async (ws: string, label?: string) => {
+  window.dispatchEvent(new CustomEvent("rf:desk-open", { detail: { ws, label } })); // first, inside the tap (fullscreen needs the gesture)
+  await fetch("/api/desk/workspace", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ws }) }).catch(() => {});
+};
 export const showDesktop = (id: string) => { try { localStorage.setItem(KEY, id); } catch { /* */ } window.dispatchEvent(new CustomEvent("opie:desk", { detail: { id, open: true } })); };
 const live = (s?: Sess | null) => s?.status === "running" || s?.status === "paused";
 
@@ -30,7 +35,8 @@ export function DesktopWidget() {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [awake, setAwake] = useState(false);
   const [app, setApp] = useState<DeskApp>(null);
-  const [btn, setBtn] = useState<{ r: number; t: number } | null>(null);
+  const [wsLabel, setWsLabel] = useState("");
+  const enterFsRef = useRef<() => void>(() => {});
   const d = useDesk(); const [mode, setMode] = useInputMode(); const real = d.state !== "unavailable";
   const moved = useRef(false);
   const fsRef = useRef<HTMLDivElement>(null);
@@ -41,13 +47,14 @@ export function DesktopWidget() {
     const mq = matchMedia("(max-width: 767px), (pointer: coarse) and (max-height: 500px)"); const lq = matchMedia("(orientation: landscape)");
     const f = () => { setMobile(mq.matches); setLand(mq.matches && lq.matches); }; f(); mq.addEventListener("change", f); lq.addEventListener("change", f); screen.orientation?.addEventListener?.("change", f);
     const saved = localStorage.getItem(KEY); if (saved) setId(saved);
-    try { const b = JSON.parse(localStorage.getItem("rf-pc-pos") || "null"); if (b) setBtn(b); } catch { /* */ }
     const oa = (e: Event) => { setAwake(true); setApp((e as CustomEvent).detail); }; window.addEventListener("rf:app", oa);
     const on = (e: Event) => { const d = (e as CustomEvent).detail; setId(d.id); if (d.open && !matchMedia("(max-width: 767px), (pointer: coarse) and (max-height: 500px)").matches) { setOpen(true); setMin(false); } };
     window.addEventListener("opie:desk", on);
+    const od = (e: Event) => { setWsLabel((e as CustomEvent).detail?.label || ""); if (mq.matches) enterFsRef.current(); else { setOpen(true); setMin(false); } };
+    window.addEventListener("rf:desk-open", od);
     const fc = () => { if (!document.fullscreenElement) { setFs(false); setRot(false); } };
     document.addEventListener("fullscreenchange", fc);
-    return () => { lq.removeEventListener("change", f); screen.orientation?.removeEventListener?.("change", f); mq.removeEventListener("change", f); window.removeEventListener("opie:desk", on); window.removeEventListener("rf:app", oa); document.removeEventListener("fullscreenchange", fc); };
+    return () => { lq.removeEventListener("change", f); screen.orientation?.removeEventListener?.("change", f); mq.removeEventListener("change", f); window.removeEventListener("opie:desk", on); window.removeEventListener("rf:desk-open", od); window.removeEventListener("rf:app", oa); document.removeEventListener("fullscreenchange", fc); };
   }, []);
 
   // poll status + screen (cheap: steps since a huge n are empty)
@@ -78,8 +85,9 @@ export function DesktopWidget() {
 
   const enterFs = async () => {
     setFs(true); setBar(true);
-    requestAnimationFrame(() => fsRef.current?.requestFullscreen?.().catch(() => {}));
+    requestAnimationFrame(() => { fsRef.current?.removeAttribute("inert"); fsRef.current?.requestFullscreen?.().catch(() => {}); });
   };
+  enterFsRef.current = enterFs;
   const exitFs = () => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); setFs(false); setRot(false); try { screen.orientation.unlock(); } catch { /* */ } };
   const rotate = async () => {
     if (rot) { setRot(false); try { screen.orientation.unlock(); } catch { /* */ } return; }
@@ -128,30 +136,17 @@ export function DesktopWidget() {
     const up = () => { removeEventListener("pointermove", mv); removeEventListener("pointerup", up); };
     addEventListener("pointermove", mv); addEventListener("pointerup", up);
   };
-  const dragBtn = (e: React.PointerEvent<HTMLButtonElement>) => {
-    const el = e.currentTarget; const r0 = el.getBoundingClientRect(); const sx = e.clientX, sy = e.clientY; moved.current = false; el.setPointerCapture(e.pointerId);
-    const mv = (m: PointerEvent) => { if (!moved.current && Math.hypot(m.clientX - sx, m.clientY - sy) < 6) return; moved.current = true;
-      setBtn({ r: Math.max(8, Math.min(innerWidth - 48, innerWidth - r0.right - (m.clientX - sx))), t: Math.max(8, Math.min(innerHeight - 48, r0.top + m.clientY - sy)) }); };
-    const up = () => { el.removeEventListener("pointermove", mv); el.removeEventListener("pointerup", up); setBtn((b) => { if (b && moved.current) localStorage.setItem("rf-pc-pos", JSON.stringify(b)); return b; }); };
-    el.addEventListener("pointermove", mv); el.addEventListener("pointerup", up);
-  };
   if (path === "/" && !open && !fs) return null; // landing page stays clean
 
   return <>
-    {/* header button (top-right, app-wide) */}
-    <button aria-label="Open computer (drag to move)" title={`Computer · ${status}`} onPointerDown={dragBtn} onClick={() => { if (moved.current) { moved.current = false; return; } if (mobile) enterFs(); else if (open) setMin(!min); else { setOpen(true); setMin(false); } }}
-      style={{ touchAction: "none", ...(btn ? { right: btn.r, top: btn.t } : {}) }}
-      className="fixed right-3 top-3 z-[60] grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-ink-900/85 text-ink-200 shadow-lg backdrop-blur transition hover:border-brand-400/50 hover:text-white md:right-5 md:top-4">
-      <Monitor className="h-[18px] w-[18px]" />
-      {live(s) && <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3"><span className={`absolute inline-flex h-full w-full rounded-full opacity-60 ${running ? "animate-ping bg-emerald-400" : "bg-amber-400"}`} /><span className={`relative inline-flex h-3 w-3 rounded-full border-2 border-ink-900 ${running ? "bg-emerald-400" : "bg-amber-400"}`} /></span>}
-    </button>
+    {/* no floating launcher: the computer opens from inside the agent chat */}
 
     {/* floating window (tablet/desktop) */}
     {open && !fs && !mobile && (
-      <div role="dialog" aria-label="Virtual desktop" style={pos ? { left: pos.x, top: pos.y } : { right: 20, top: 64 }}
-        className={`fixed z-[55] flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-ink-950/95 shadow-2xl shadow-black/60 backdrop-blur ${min ? "w-[300px]" : "h-[440px] w-[640px] min-h-[260px] min-w-[360px] max-h-[90dvh] max-w-[96vw] resize"}`}>
+      <div role="dialog" aria-label="Virtual desktop" style={pos ? { left: pos.x, top: pos.y } : { left: 96, top: 24 }}
+        className={`fixed z-[75] flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-ink-950/95 shadow-2xl shadow-black/60 backdrop-blur ${min ? "w-[300px]" : "h-[440px] w-[640px] min-h-[260px] min-w-[360px] max-h-[90dvh] max-w-[96vw] resize"}`}>
         <div onPointerDown={drag} className="flex h-11 shrink-0 cursor-move items-center gap-2 border-b border-white/[0.06] bg-ink-900 px-3">
-          <Monitor className="h-4 w-4 text-brand-400" /><span className="text-sm font-semibold">ReelForge computer</span>
+          <Monitor className="h-4 w-4 text-brand-400" /><span className="text-sm font-semibold">{wsLabel ? `${wsLabel}’s computer` : "ReelForge computer"}</span>
           <span className={`badge ${status === "live" ? "bg-emerald-500/15 text-emerald-300" : status === "you" ? "bg-brand-500/20 text-brand-200" : status === "paused" ? "bg-amber-500/15 text-amber-300" : "bg-white/10 text-ink-300"}`}>{status === "live" && <i className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" />}{status === "you" ? "You’re in control" : status.toUpperCase()}</span>
           <span className="ml-auto flex items-center gap-0.5">
             <button className={IB} title={min ? "Restore" : "Minimise"} aria-label="Minimise" onClick={() => setMin(!min)}><Minus className="h-4 w-4" /></button>

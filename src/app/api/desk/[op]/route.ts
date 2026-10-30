@@ -1,7 +1,8 @@
 import { desk, deskContext, deskContextIfUp } from "@/lib/desk";
 import { allSessions } from "@/lib/research";
 import { currentUser } from "@/lib/auth";
-import { claimDesk, deskBusyFor, deskOwner, touchDesk } from "@/lib/deskLease";
+import { claimDesk, deskBusyFor, deskOwner, deskWorkspace, setActiveWorkspace, touchDesk, wsKey } from "@/lib/deskLease";
+import { chats } from "@/lib/chats";
 export const dynamic = "force-dynamic";
 
 const pass = async (r: Response) => new Response(r.status === 204 ? null : await r.arrayBuffer(), { status: r.status, headers: { "Content-Type": r.headers.get("Content-Type") || "application/json", "Cache-Control": "no-store" } });
@@ -12,7 +13,8 @@ const busy = (m: { error: string; minutes: number }) => Response.json({ state: "
 async function gate(claim: boolean, force = false) {
   const u = await currentUser(); if (!u) return Response.json({ error: "Please sign in." }, { status: 401 });
   if (!claim) {
-    if (deskOwner() === u.id) { touchDesk(u.id); return u; }
+    if (deskWorkspace() === wsKey(u.id)) { touchDesk(u.id); return u; }
+    if (deskOwner() === u.id) return { asleep: true } as const; // one of my other agents' workspace: wake switches
     const m = await deskBusyFor(u.id); if (m !== null) return busy({ error: `Reel’s computer is being used by another creator right now. It frees up in about ${m} min.`, minutes: m });
     return { asleep: true } as const;
   }
@@ -31,9 +33,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ op: stri
   try { return await pass(await desk("/" + op, undefined, 5000)); } catch { return down(); }
 }
 export async function POST(req: Request, { params }: { params: Promise<{ op: string }> }) {
-  const { op } = await params; if (!["wake", "sleep", "control", "input", "browser"].includes(op)) return Response.json({ error: "not found" }, { status: 404 });
+  const { op } = await params;
+  if (op === "workspace") {
+    const u = await currentUser(); if (!u) return Response.json({ error: "Please sign in." }, { status: 401 });
+    const { ws } = await req.json().catch(() => ({}));
+    const w = String(ws || "main"); if (w !== "main" && !chats.get(w, u.id)) return Response.json({ error: "not found" }, { status: 404 });
+    setActiveWorkspace(u.id, w); return Response.json({ ok: true, ws: w });
+  }
+  if (!["wake", "sleep", "control", "input", "browser"].includes(op)) return Response.json({ error: "not found" }, { status: 404 });
   const b = await req.json().catch(() => ({}));
-  if (op === "sleep" && deskOwner() !== (await currentUser())?.id) return Response.json({ state: "asleep" });
+  if (op === "sleep" && deskWorkspace() !== wsKey((await currentUser())?.id || "-")) return Response.json({ state: "asleep" });
   const gt = await gate(true, !!b.force); if (gt instanceof Response) return gt;
   if (op === "control") for (const s of allSessions()) if (s.ownerId === (gt as { id: string }).id && (s.status === "running" || s.status === "paused")) s.control = !!b.on; // pause/resume the agent
   try {

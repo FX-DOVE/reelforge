@@ -1,11 +1,11 @@
 "use client";
-import { showDesktop } from "./DesktopWidget";
+import { showDesktop, openAgentDesktop } from "./DesktopWidget";
 import { friendly, ndjson, resumeStream } from "@/lib/net";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { AgentSwitcher } from "./AgentSwitcher";
-import { ArrowUp, Check, ChevronDown, ChevronLeft, Plus, Loader2, Paperclip, RotateCw, Square, Volume2, VolumeX, Wrench, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, ChevronLeft, Monitor, Plus, Loader2, Paperclip, RotateCw, Square, Volume2, VolumeX, Wrench, X } from "lucide-react";
 import { Mascot } from "./Mascot";
 import { autoResearchPref } from "@/lib/autopref";
 import { ResearchBar, type ResearchJob } from "./ResearchBar";
@@ -183,7 +183,7 @@ export function FloatingAgent() {
   }, [open]);
   if (path.startsWith("/admin")) return null;
   const projectId = path.match(/^\/studio\/([^/]+)/)?.[1];
-  const choose = (a: AgentLite | null) => { setCur(a); setPick(false); if (a) localStorage.setItem("rf-agent", a.id); else localStorage.removeItem("rf-agent"); };
+  const choose = (a: AgentLite | null) => { setCur(a); void fetch("/api/desk/workspace", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ws: a?.id || "main" }) }).catch(() => {}); setPick(false); if (a) localStorage.setItem("rf-agent", a.id); else localStorage.removeItem("rf-agent"); };
   const newAgent = async () => { const n = agents.filter((a) => /^AI video agent/.test(a.title)).length; const r = await fetch("/api/chats", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: n ? `AI video agent ${n + 1}` : "AI video agent" }) }).then((x) => x.ok ? x.json() : null).catch(() => null); if (r?.chat) { await reload(); choose(r.chat); } };
   const mute = () => { const m = !muted; setMuted(m); localStorage.setItem("rf-mute", m ? "1" : "0"); };
   return (
@@ -199,6 +199,7 @@ export function FloatingAgent() {
               <div className="min-w-0 leading-tight"><p className="flex items-center gap-1 text-[15px] font-semibold"><span className="truncate">{cur?.title || "Reel"}</span><ChevronDown className={`h-4 w-4 shrink-0 text-ink-400 transition-transform ${pick ? "rotate-180" : ""}`} /></p><p className="truncate text-xs text-ink-400">{cur ? (cur.topic || "Producer") : projectId ? "Working on this project" : "Producer · ReelForge Studio"}</p></div>
             </button>
             <button data-t="agent-new" aria-label="New agent" className="grid h-10 w-10 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white" onClick={newAgent}><Plus className="h-5 w-5" /></button>
+            <button data-t="agent-computer" aria-label="Open this agent’s computer" title="This agent’s computer" className="grid h-10 w-10 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white" onClick={() => openAgentDesktop(cur?.id || "main", cur?.title || "Reel")}><Monitor className="h-5 w-5" /></button>
             <button aria-label={muted ? "Unmute sounds" : "Mute sounds"} className="grid h-10 w-10 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white" onClick={mute}>{muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</button>
             <button aria-label="Close" className="hidden h-10 w-10 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white md:grid" onClick={() => setOpen(false)}><X className="h-5 w-5" /></button>
           </div>

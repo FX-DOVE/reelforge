@@ -86,7 +86,7 @@ export const TOOLS: Record<string, Tool> = {
   edit_video: { req: ["prompt"], desc: '{"prompt"} — apply an edit command (music, subtitles, pacing, voice…)', run: async (c, a) => { const p = proj(c); const r = await act(p.id, { action: "aiEdit", prompt: String(a.prompt || "") }); return JSON.stringify(r.result ?? r).slice(0, 500); } },
   research: { req: ["task","goal"], desc: '{"task":"trending|analyse|watch|custom","goal","url"?,"maxSteps":8} — run the virtual-desktop browser agent (YouTube research, watching videos); notes are saved to the open project', run: async (c, a, emit) => {
     const task = (["trending", "analyse", "watch", "custom"].includes(String(a.task)) ? a.task : "custom") as Task;
-    const s = startResearch({ goal: String(a.goal || a.url || "research"), task, url: a.url ? String(a.url) : undefined, projectId: c.projectId, maxSteps: Number(a.maxSteps) || 8, ownerId: c.ownerId });
+    const s = startResearch({ goal: String(a.goal || a.url || "research"), task, url: a.url ? String(a.url) : undefined, projectId: c.projectId, maxSteps: Number(a.maxSteps) || 8, ownerId: c.ownerId, workspace: c.id.includes("~") ? c.id.split("~")[0] : "main" }); // this agent's own desktop
     c.researchId = s.id; emit({ type: "session", id: s.id }); let seen = 0;
     while (s.status === "running" || s.status === "paused") {
       await new Promise((r) => setTimeout(r, 1500));
