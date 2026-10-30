@@ -5,7 +5,7 @@ import { FilmStage, FilmStrip, FloatCard, Hero, Reveal, StepSequence } from "@/c
 
 // Landing films are served from Cloudflare R2 (LANDING_CDN_BASE, e.g. https://media.example.com/landing) with /brand as fallback.
 export const dynamic = "force-dynamic";
-const V = "2";
+const V = "3";
 const cdn = (f: string) => (process.env.LANDING_CDN_BASE ? `${process.env.LANDING_CDN_BASE.replace(/\/$/, "")}/${f}?v=${V}` : undefined);
 const vid = (f: string) => ({ src: `/brand/${f}?v=${V}`, cdn: cdn(f) });
 const img = (f: string) => cdn(f) || `/brand/${f}?v=${V}`;
@@ -40,8 +40,13 @@ const STILLS = [
   { src: img("card-do-arrival.jpg"), video: vid("card-do-arrival.mp4"), t: "Daniel & Olivia · Jacinta" },
   { src: img("card-akara-confront.jpg"), video: vid("card-akara-confront.mp4"), t: "The Akara Girl · The Will" },
   { src: img("card-do-mother.jpg"), video: vid("card-do-mother.mp4"), t: "Daniel & Olivia · Mother" },
+  { src: img("card-do-leave.jpg"), video: vid("card-do-leave.mp4"), t: "Daniel & Olivia · I’m Done" },
+  { src: img("card-do-daniel.jpg"), video: vid("card-do-daniel.mp4"), t: "Daniel & Olivia · Daniel" },
   { src: img("card-akara-will.jpg"), video: vid("card-akara-will.mp4"), t: "The Akara Girl · Reading" },
+  { src: img("card-do-jacinta.jpg"), video: vid("card-do-jacinta.mp4"), t: "Daniel & Olivia · Jacinta Leaves" },
   { src: img("card-akara-lawyer.jpg"), video: vid("card-akara-lawyer.mp4"), t: "The Akara Girl · Counsel" },
+  { src: img("card-do-promise.jpg"), video: vid("card-do-promise.mp4"), t: "Daniel & Olivia · The Promise" },
+  { src: img("card-do-son.jpg"), video: vid("card-do-son.mp4"), t: "Daniel & Olivia · Mother & Son" },
 ];
 
 export default function Landing() {
@@ -55,7 +60,7 @@ export default function Landing() {
       <section id="film" className="mx-auto max-w-6xl scroll-mt-20 px-5 pt-20 sm:px-8 sm:pt-28">
         <Reveal><h2 className="text-center text-4xl font-semibold tracking-[-0.03em] sm:text-6xl">Made here. Start to finish.</h2></Reveal>
         <Reveal delay={0.08}><p className="mx-auto mt-4 max-w-xl text-center text-lg text-ink-400">Written, cast, boarded, voiced and cut in ReelForge.</p></Reveal>
-        <FilmStage src={vid("film.mp4")} poster={img("film-poster.jpg")} />
+        <FilmStage src={vid("film-do.mp4")} poster={img("film-do-poster.jpg")} />
       </section>
 
       <section id="features" className="mx-auto max-w-7xl scroll-mt-20 px-5 py-24 sm:px-8 sm:py-32">

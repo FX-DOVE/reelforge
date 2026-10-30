@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
-import { useRef, type ReactNode, type PointerEvent } from "react";
+import { useRef, useState, type ReactNode, type PointerEvent } from "react";
 import { motion, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform, type Variants } from "motion/react";
-import { ArrowRight, Play } from "lucide-react";
+import { ArrowRight, Play, Volume2, VolumeX } from "lucide-react";
 
 /** Landing media: CDN copy first (Cloudflare R2), local /brand copy as automatic fallback. */
 export type Media = { src: string; cdn?: string };
@@ -121,16 +121,35 @@ export function StepSequence({ steps }: { steps: [string, string, string][] }) {
   );
 }
 
-/** The film itself on a dark stage that scales up as it enters. */
+/** The film itself on a dark stage that scales up as it enters. Autoplays muted (allowed on iPhone); tap to hear it. */
 export function FilmStage({ src, poster }: { src: Media; poster: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  const vref = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(true);
+  const [vol, setVol] = useState(0.8);
   const reduce = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "center center"] });
   const scale = useTransform(scrollYProgress, [0, 1], [reduce ? 1 : 0.88, 1]);
   const radius = useTransform(scrollYProgress, [0, 1], [40, 28]);
+  const toggle = () => {
+    const v = vref.current; if (!v) return;
+    const next = !v.muted; v.muted = next; if (!next) { v.volume = vol || 0.8; if (!vol) setVol(0.8); v.play().catch(() => {}); }
+    setMuted(next);
+  };
+  const setVolume = (x: number) => {
+    const v = vref.current; setVol(x); if (!v) return;
+    v.volume = x; v.muted = x === 0; setMuted(x === 0); if (x > 0) v.play().catch(() => {});
+  };
   return (
-    <motion.div ref={ref} style={{ scale, borderRadius: radius }} className="dark-surface mt-12 overflow-hidden bg-black shadow-[0_30px_80px_rgba(0,0,0,.25)] will-change-transform">
-      <video poster={poster} controls muted playsInline preload="metadata" className="aspect-video w-full bg-black object-cover"><Sources m={src} /></video>
+    <motion.div ref={ref} style={{ scale, borderRadius: radius }} className="dark-surface relative mt-12 overflow-hidden bg-black shadow-[0_30px_80px_rgba(0,0,0,.25)] will-change-transform">
+      <video ref={vref} poster={poster} autoPlay muted loop playsInline preload="metadata" controls={false} onClick={toggle} className="aspect-video w-full cursor-pointer bg-black object-cover"><Sources m={src} /></video>
+      <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full bg-black/60 px-2 py-1.5 text-white backdrop-blur-md sm:bottom-5 sm:left-5">
+        <button type="button" onClick={toggle} aria-label={muted ? "Unmute film" : "Mute film"} className="flex h-9 items-center gap-1.5 rounded-full px-2 text-sm font-medium hover:bg-white/10">
+          {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+          <span>{muted ? "Tap for sound" : "Sound on"}</span>
+        </button>
+        <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : vol} onChange={(e) => setVolume(+e.target.value)} aria-label="Volume" className="h-1 w-20 cursor-pointer accent-white sm:w-28" />
+      </div>
     </motion.div>
   );
 }
