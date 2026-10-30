@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
-import { useRef, useState, type ReactNode, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type ReactNode, type PointerEvent } from "react";
 import { motion, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform, type Variants } from "motion/react";
-import { ArrowRight, Play, Volume2, VolumeX } from "lucide-react";
+import { ArrowRight, Play, Volume2, VolumeX, ChevronLeft, ChevronRight } from "lucide-react";
 
 /** Landing media: CDN copy first (Cloudflare R2), local /brand copy as automatic fallback. */
 export type Media = { src: string; cdn?: string };
@@ -121,35 +121,72 @@ export function StepSequence({ steps }: { steps: [string, string, string][] }) {
   );
 }
 
-/** The film itself on a dark stage that scales up as it enters. Autoplays muted (allowed on iPhone); tap to hear it. */
-export function FilmStage({ src, poster }: { src: Media; poster: string }) {
+export type Reel = { title: string; video: Media; poster: string };
+
+/** "Made here" films: one stage, several films. Edge arrows, dots, swipe and keyboard arrows.
+ *  Only the active film streams; the next one preloads metadata; the rest show posters only. Starts muted (autoplay rule), tap for sound. */
+export function FilmCarousel({ reels }: { reels: Reel[] }) {
   const ref = useRef<HTMLDivElement>(null);
-  const vref = useRef<HTMLVideoElement>(null);
+  const vids = useRef<(HTMLVideoElement | null)[]>([]);
+  const touch = useRef<number | null>(null);
+  const [i, setI] = useState(0);
   const [muted, setMuted] = useState(true);
   const [vol, setVol] = useState(0.8);
   const reduce = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "center center"] });
   const scale = useTransform(scrollYProgress, [0, 1], [reduce ? 1 : 0.88, 1]);
   const radius = useTransform(scrollYProgress, [0, 1], [40, 28]);
+  const n = reels.length;
+  const go = (d: number) => setI((x) => (x + d + n) % n);
+  useEffect(() => {
+    vids.current.forEach((v, k) => {
+      if (!v) return;
+      if (k === i) { v.muted = muted; v.volume = vol || 0.8; v.play().catch(() => { v.muted = true; setMuted(true); v.play().catch(() => {}); }); }
+      else { v.pause(); try { v.currentTime = 0; } catch {} }
+    });
+  }, [i]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggle = () => {
-    const v = vref.current; if (!v) return;
+    const v = vids.current[i]; if (!v) return;
     const next = !v.muted; v.muted = next; if (!next) { v.volume = vol || 0.8; if (!vol) setVol(0.8); v.play().catch(() => {}); }
     setMuted(next);
   };
   const setVolume = (x: number) => {
-    const v = vref.current; setVol(x); if (!v) return;
+    const v = vids.current[i]; setVol(x); if (!v) return;
     v.volume = x; v.muted = x === 0; setMuted(x === 0); if (x > 0) v.play().catch(() => {});
   };
+  const arrow = "absolute top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-[#1d1d1f] shadow-lg backdrop-blur-md transition hover:bg-white sm:h-14 sm:w-14";
   return (
-    <motion.div ref={ref} style={{ scale, borderRadius: radius }} className="dark-surface relative mt-12 overflow-hidden bg-black shadow-[0_30px_80px_rgba(0,0,0,.25)] will-change-transform">
-      <video ref={vref} poster={poster} autoPlay muted loop playsInline preload="metadata" controls={false} onClick={toggle} className="aspect-video w-full cursor-pointer bg-black object-cover"><Sources m={src} /></video>
-      <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full bg-black/60 px-2 py-1.5 text-white backdrop-blur-md sm:bottom-5 sm:left-5">
-        <button type="button" onClick={toggle} aria-label={muted ? "Unmute film" : "Mute film"} className="flex h-9 items-center gap-1.5 rounded-full px-2 text-sm font-medium hover:bg-white/10">
-          {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-          <span>{muted ? "Tap for sound" : "Sound on"}</span>
-        </button>
-        <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : vol} onChange={(e) => setVolume(+e.target.value)} aria-label="Volume" className="h-1 w-20 cursor-pointer accent-white sm:w-28" />
+    <div className="relative mt-12" tabIndex={0} role="region" aria-roledescription="carousel" aria-label="Films made with AI"
+      onKeyDown={(e) => { if (e.key === "ArrowLeft") go(-1); if (e.key === "ArrowRight") go(1); }}>
+      <motion.div ref={ref} style={{ scale, borderRadius: radius }} className="dark-surface relative overflow-hidden bg-black shadow-[0_30px_80px_rgba(0,0,0,.25)] will-change-transform"
+        onTouchStart={(e) => { touch.current = e.touches[0].clientX; }}
+        onTouchEnd={(e) => { if (touch.current == null) return; const dx = e.changedTouches[0].clientX - touch.current; touch.current = null; if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1); }}>
+        <div className="relative aspect-video w-full">
+          {reels.map((r, k) => {
+            const active = k === i, next = k === (i + 1) % n;
+            return (
+              <div key={r.title} aria-hidden={!active} className={`absolute inset-0 transition-opacity duration-500 ${active ? "opacity-100" : "pointer-events-none opacity-0"}`}>
+                {active || next
+                  ? <video ref={(el) => { vids.current[k] = el; }} poster={r.poster} muted playsInline loop preload={active ? "auto" : "metadata"} onClick={toggle} className="h-full w-full cursor-pointer bg-black object-cover"><Sources m={r.video} /></video>
+                  : <img src={r.poster} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />}
+              </div>
+            );
+          })}
+        </div>
+        <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-full bg-black/60 px-2 py-1.5 text-white backdrop-blur-md sm:bottom-5 sm:left-5">
+          <button type="button" onClick={toggle} aria-label={muted ? "Unmute film" : "Mute film"} className="flex h-9 items-center gap-1.5 rounded-full px-2 text-sm font-medium hover:bg-white/10">
+            {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+            <span className="hidden sm:inline">{muted ? "Tap for sound" : "Sound on"}</span>
+          </button>
+          <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : vol} onChange={(e) => setVolume(+e.target.value)} aria-label="Volume" className="h-1 w-16 cursor-pointer accent-white sm:w-28" />
+        </div>
+        <p className="absolute right-4 top-3 z-10 rounded-full bg-black/55 px-3 py-1 text-xs font-medium text-white backdrop-blur-md sm:right-5 sm:top-5 sm:text-sm">{reels[i].title} · {i + 1}/{n}</p>
+      </motion.div>
+      <button type="button" onClick={() => go(-1)} aria-label="Previous film" className={`${arrow} -left-2 sm:-left-7`}><ChevronLeft className="h-6 w-6" /></button>
+      <button type="button" onClick={() => go(1)} aria-label="Next film" className={`${arrow} -right-2 sm:-right-7`}><ChevronRight className="h-6 w-6" /></button>
+      <div className="mt-5 flex justify-center gap-2">
+        {reels.map((r, k) => <button key={r.title} type="button" onClick={() => setI(k)} aria-label={`Play ${r.title}`} aria-current={k === i} className={`h-2.5 rounded-full transition-all ${k === i ? "w-7 bg-[#1d1d1f]" : "w-2.5 bg-black/20 hover:bg-black/40"}`} />)}
       </div>
-    </motion.div>
+    </div>
   );
 }

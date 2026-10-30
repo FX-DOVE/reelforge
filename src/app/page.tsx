@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { PublicNav, PublicFooter, CtaBand } from "@/components/PublicSite";
-import { FilmStage, FilmStrip, FloatCard, Hero, Reveal, StepSequence } from "@/components/landing/Motion";
+import { FilmCarousel, FilmStrip, FloatCard, Hero, Reveal, StepSequence } from "@/components/landing/Motion";
 
 // Landing films are served from Cloudflare R2 (LANDING_CDN_BASE, e.g. https://media.example.com/landing) with /brand as fallback.
 export const dynamic = "force-dynamic";
-const V = "3";
+const V = "4";
 const cdn = (f: string) => (process.env.LANDING_CDN_BASE ? `${process.env.LANDING_CDN_BASE.replace(/\/$/, "")}/${f}?v=${V}` : undefined);
 const vid = (f: string) => ({ src: `/brand/${f}?v=${V}`, cdn: cdn(f) });
 const img = (f: string) => cdn(f) || `/brand/${f}?v=${V}`;
@@ -60,7 +60,12 @@ export default function Landing() {
       <section id="film" className="mx-auto max-w-6xl scroll-mt-20 px-5 pt-20 sm:px-8 sm:pt-28">
         <Reveal><h2 className="text-center text-4xl font-semibold tracking-[-0.03em] sm:text-6xl">Made here. Start to finish.</h2></Reveal>
         <Reveal delay={0.08}><p className="mx-auto mt-4 max-w-xl text-center text-lg text-ink-400">Written, cast, boarded, voiced and cut in ReelForge.</p></Reveal>
-        <FilmStage src={vid("film-do.mp4")} poster={img("film-do-poster.jpg")} />
+        <FilmCarousel reels={[
+          { title: "Daniel & Olivia", video: vid("reel-daniel-olivia.mp4"), poster: img("reel-daniel-olivia.jpg") },
+          { title: "The Akara Girl", video: vid("reel-akara-girl.mp4"), poster: img("reel-akara-girl.jpg") },
+          { title: "The Chief", video: vid("reel-the-chief.mp4"), poster: img("reel-the-chief.jpg") },
+          { title: "The Inheritance", video: vid("reel-the-inheritance.mp4"), poster: img("reel-the-inheritance.jpg") },
+        ]} />
       </section>
 
       <section id="features" className="mx-auto max-w-7xl scroll-mt-20 px-5 py-24 sm:px-8 sm:py-32">
