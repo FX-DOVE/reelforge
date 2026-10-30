@@ -72,12 +72,12 @@ export const siteFile = (s: Site, rel: string) => { const base = siteDir(s); con
 // minimal store-only ZIP (no dependency)
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
 const crc32 = (b: Buffer) => { let c = 0xffffffff; for (const x of b) c = CRC[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
-export function zipSite(s: Site): Buffer {
+export function zipSite(s: Site): Buffer { const zd = new Date(); const dosT = (zd.getHours() << 11) | (zd.getMinutes() << 5) | (zd.getSeconds() >> 1), dosD = ((zd.getFullYear() - 1980) << 9) | ((zd.getMonth() + 1) << 5) | zd.getDate();
   const parts: Buffer[] = [], central: Buffer[] = []; let off = 0;
   for (const f of s.files) {
     const data = fs.readFileSync(path.join(siteDir(s), f)); const name = Buffer.from(`${s.slug}/${f}`); const crc = crc32(data);
-    const lh = Buffer.alloc(30); lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt32LE(crc, 14); lh.writeUInt32LE(data.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(name.length, 26);
-    const ch = Buffer.alloc(46); ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(data.length, 20); ch.writeUInt32LE(data.length, 24); ch.writeUInt16LE(name.length, 28); ch.writeUInt32LE(off, 42);
+    const lh = Buffer.alloc(30); lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(dosT, 10); lh.writeUInt16LE(dosD, 12); lh.writeUInt32LE(crc, 14); lh.writeUInt32LE(data.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(name.length, 26);
+    const ch = Buffer.alloc(46); ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(dosT, 12); ch.writeUInt16LE(dosD, 14); ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(data.length, 20); ch.writeUInt32LE(data.length, 24); ch.writeUInt16LE(name.length, 28); ch.writeUInt32LE(off, 42);
     parts.push(lh, name, data); central.push(ch, name); off += 30 + name.length + data.length;
   }
   const cd = Buffer.concat(central); const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(s.files.length, 8); end.writeUInt16LE(s.files.length, 10); end.writeUInt32LE(cd.length, 12); end.writeUInt32LE(off, 16);
