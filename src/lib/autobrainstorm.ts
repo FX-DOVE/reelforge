@@ -96,7 +96,7 @@ async function execute(pid: string, prompt: string, ownerId: string) {
   if (rs) { await upd(pid, (a) => { a.researchId = rs!.id; }); await step(pid, "Working on Reel’s computer — browsing YouTube (tap the computer icon to watch)"); }
   // 2b) YouTube Intelligence skill (vidIQ-style): competitor outliers, ranked titles, tags — runs in the background, shapes the script
   let yti: import("./ytintel").YtReport | null = null; let ytiId = "";
-  try { const { startReport } = await import("./ytintel"); ytiId = startReport({ ownerId, topic: (plan.yt || [])[0] || plan.topic, format: p.format === "yt_long" ? "long" : "shorts", minutes: Math.max(1, Math.round((p.targetSec || 60) / 60)), mockup: false, projectId: pid }).id; await step(pid, "YouTube Intelligence: studying competing channels, outliers, titles and keywords…"); } catch { /* optional */ }
+  try { const { startReport } = await import("./ytintel"); ytiId = startReport({ ownerId, topic: (plan.yt || [])[0] || plan.topic, format: p.format === "yt_long" ? "long" : "any", minutes: Math.max(1, Math.round((p.targetSec || 60) / 60)), mockup: false, projectId: pid }).id; await step(pid, "YouTube Intelligence: studying competing channels, outliers, titles and keywords…"); } catch { /* optional */ }
   // 3) in parallel: more YouTube queries + web research
   for (const q of (plan.yt || []).slice(0, 4)) { await step(pid, `YouTube search: “${q}”`); await add(await ytSearch(q)); }
   const vids = all.filter((s) => s.kind === "youtube");
