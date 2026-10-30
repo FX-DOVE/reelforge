@@ -154,7 +154,7 @@ export function FilmCarousel({ reels }: { reels: Reel[] }) {
     const v = vids.current[i]; setVol(x); if (!v) return;
     v.volume = x; v.muted = x === 0; setMuted(x === 0); if (x > 0) v.play().catch(() => {});
   };
-  const arrow = "absolute top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-[#1d1d1f] shadow-lg backdrop-blur-md transition hover:bg-white sm:h-14 sm:w-14";
+  const arrow = "absolute top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-[#fff]/90 text-[#1d1d1f] shadow-[0_8px_24px_rgba(0,0,0,.25)] ring-1 ring-black/10 backdrop-blur-md transition hover:bg-[#fff] sm:h-14 sm:w-14";
   return (
     <div className="relative mt-12" tabIndex={0} role="region" aria-roledescription="carousel" aria-label="Films made with AI"
       onKeyDown={(e) => { if (e.key === "ArrowLeft") go(-1); if (e.key === "ArrowRight") go(1); }}>
