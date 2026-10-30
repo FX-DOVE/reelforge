@@ -14,7 +14,7 @@ import { getConfig } from "./config";
 import type { AutoRun, AutoSource, Project } from "./types";
 import { MODES, FORMATS } from "./types";
 
-const running = ((globalThis as unknown as { __rfAuto?: Set<string> }).__rfAuto ??= new Set());
+const running = ((globalThis as unknown as { __rfAutoBS?: Set<string> }).__rfAutoBS ??= new Set());
 const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const strip = (h: string) => h.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<nav[\s\S]*?<\/nav>|<footer[\s\S]*?<\/footer>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&#39;|&rsquo;/g, "'").replace(/&quot;/g, '"').replace(/\s+/g, " ").trim();
