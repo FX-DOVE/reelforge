@@ -35,6 +35,9 @@ export const db = {
   },
   findUserByEmail(email: string) { return Object.values(load().users!).find((u) => u.email === email.toLowerCase()); },
   getUser(id: string) { return load().users![id]; },
+  listUsers() { return Object.values(load().users!); },
+  /** Insert only if no account has this email — checked inside the write chain, so two simultaneous sign-ups can't both win. */
+  async insertUserUnique(u: UserRec) { return (chain = chain.then(() => { const us = load().users!; if (Object.values(us).some((x) => x.email === u.email)) return false; us[u.id] = u; persist(); return true; })) as Promise<boolean>; },
   async deleteUser(id: string) { return (chain = chain.then(() => { delete load().users![id]; delete load().memory![id]; persist(); })); },
   async saveUser(u: UserRec) { return (chain = chain.then(() => { load().users![u.id] = u; persist(); })); },
   getMemory(uid: string): UserMemory { return load().memory![uid] || { enabled: true, notes: [] }; },

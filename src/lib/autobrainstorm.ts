@@ -94,6 +94,9 @@ async function execute(pid: string, prompt: string, ownerId: string) {
   // 2) the agent's own desktop: visible YouTube research + transcripts + Google facts (user can watch it live)
   let rs = plan.desktop !== false ? startResearch({ goal: plan.topic, task: "topic", projectId: pid, ownerId, workspace: "main", maxSteps: 10, auto: true }) : null;
   if (rs) { await upd(pid, (a) => { a.researchId = rs!.id; }); await step(pid, "Working on Reel’s computer — browsing YouTube (tap the computer icon to watch)"); }
+  // 2b) YouTube Intelligence skill (vidIQ-style): competitor outliers, ranked titles, tags — runs in the background, shapes the script
+  let yti: import("./ytintel").YtReport | null = null; let ytiId = "";
+  try { const { startReport } = await import("./ytintel"); ytiId = startReport({ ownerId, topic: plan.topic, format: p.format === "yt_long" ? "long" : "shorts", minutes: Math.max(1, Math.round((p.targetSec || 60) / 60)), mockup: false, projectId: pid }).id; await step(pid, "YouTube Intelligence: studying competing channels, outliers, titles and keywords…"); } catch { /* optional */ }
   // 3) in parallel: more YouTube queries + web research
   for (const q of (plan.yt || []).slice(0, 4)) { await step(pid, `YouTube search: “${q}”`); await add(await ytSearch(q)); }
   const vids = all.filter((s) => s.kind === "youtube");
@@ -114,6 +117,7 @@ async function execute(pid: string, prompt: string, ownerId: string) {
     await add([...s.trending.map((v) => ({ kind: "desktop" as const, title: v.title, url: v.url, meta: [v.channel, v.views, v.length].filter(Boolean).join(" · ") })), ...(s.facts || []).slice(0, 8).map((f) => ({ kind: "desktop" as const, title: f.slice(0, 90), meta: "Google (desktop browser)" }))]);
     if (s.notes) notes.unshift(`DESKTOP RESEARCH NOTES:\n${s.notes.slice(0, 3000)}`); notes.push(...s.findings.slice(0, 4).map((f) => f.slice(0, 1800)));
   }
+  if (ytiId) { const { waitReport } = await import("./ytintel"); yti = await waitReport(ownerId, ytiId, 180_000); if (yti?.status === "done") { await step(pid, `YouTube Intelligence: ${yti.videos?.length || 0} competitor videos · top title “${yti.titles?.[0]?.title || "-"}”`); const { reportText } = await import("./ytintel"); notes.unshift(`YOUTUBE INTELLIGENCE (what performs — use it to shape the hook, title and pacing):\n${reportText(yti).slice(0, 3500)}`); } else await step(pid, "YouTube Intelligence still running — writing without it"); }
   await step(pid, `Gathered ${all.length} sources — choosing the film style…`);
   // 4) synthesis: one complete script with the genre skill + bible
   await pickGenre(p, prompt); p = db.getProject(pid)!; const g = genreFor(p);
@@ -138,7 +142,7 @@ Return JSON {"title": string, "logline": one sentence, "idea": short development
   try { await extractAssets(db.getProject(pid)!); } catch { /* user can rebuild from the Bible tab */ }
   const est = estimateRuntime(script).sec;
   await db.update(pid, (x) => {
-    x.brainstorm.push({ role: "assistant", kind: "research", content: `**Done — “${data.title}”** written from ${all.length} sources (${vids.length} YouTube videos, ${tN} transcripts, ${webs.length} web pages${s ? ", plus Reel’s desktop browser" : ""}).\n\n${data.logline || ""}\n\nEstimated runtime **${fmtDur(est)}** (target ${fmtDur(x.targetSec!)}). The script, idea and bible are filled in — edit anything you like.`, provider: source, at: new Date().toISOString() });
+    x.brainstorm.push({ role: "assistant", kind: "research", content: `**Done — “${data.title}”** written from ${all.length} sources (${vids.length} YouTube videos, ${tN} transcripts, ${webs.length} web pages${s ? ", plus Reel’s desktop browser" : ""}).\n\n${data.logline || ""}\n\nEstimated runtime **${fmtDur(est)}** (target ${fmtDur(x.targetSec!)}). The script, idea and bible are filled in — edit anything you like.${yti?.status === "done" ? `\n\n**YouTube title ideas**\n${(yti.titles || []).slice(0, 5).map((t, i) => `${i + 1}. ${t.title} (${t.score})`).join("\n")}\n\n**Tags:** ${(yti.keywords || []).slice(0, 12).map((k) => k.keyword).join(", ")}\n\n**Hashtags:** ${(yti.hashtags || []).slice(0, 8).join(" ")}\n\nThe top title, description and tags are saved to the project’s YouTube details.` : ""}`, provider: source, at: new Date().toISOString() });
     if (x.auto) { x.auto.status = "done"; x.auto.estSec = est; x.auto.provider = source; x.auto.finishedAt = new Date().toISOString(); x.auto.step = "Script ready"; x.auto.steps.push({ at: x.auto.finishedAt, text: `Script ready · ~${fmtDur(est)} · ${all.length} sources` }); }
   });
 }

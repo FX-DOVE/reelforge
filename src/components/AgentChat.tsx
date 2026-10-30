@@ -16,7 +16,7 @@ import { ResearchBar, type ResearchJob } from "./ResearchBar";
 type Item =
   | { k: "user"; text: string }
   | { k: "ai"; text: string; provider?: string; live?: boolean }
-  | { k: "site"; id: string; name: string; preview: string; zip: string }
+  | { k: "site"; id: string; name: string; preview: string; zip: string; live?: string }
   | { k: "tool"; id: string; name: string; args: Record<string, unknown>; ok?: boolean; summary?: string; status?: string[] }
   | { k: "info"; text: string; retry?: string };
 
@@ -73,8 +73,8 @@ export function AgentChat({ projectId, onSession, className = "", starters, agen
           else if (e.type === "tool_args") push((x) => x.map((it) => it.k === "tool" && it.id === e.id ? { ...it, args: e.args } : it));
           else if (e.type === "plan") push((x) => [...x, { k: "info", text: `Plan: ${e.steps.map((t: string) => LABEL[t] || t).join(" → ")}` }]);
           else if (e.type === "tool_end") push((x) => x.map((it) => it.k === "tool" && it.id === e.id ? { ...it, ok: e.ok, summary: e.summary } : it));
-          else if (e.type === "site") push((x) => [...x.filter((it) => !(it.k === "site" && it.id === e.id)), { k: "site", id: e.id, name: e.name, preview: e.preview, zip: e.zip }]);
-          else if (e.type === "ytintel") push((x) => [...x, { k: "info", text: `YouTube Intelligence report — /youtube?r=${e.id}` }]);
+          else if (e.type === "site") push((x) => [...x.filter((it) => !(it.k === "site" && it.id === e.id)), { k: "site", id: e.id, name: e.name, preview: e.preview, zip: e.zip, live: e.live }]);
+          else if (e.type === "ytintel") push((x) => [...x, { k: "info", text: "YouTube Intelligence is studying competing videos, titles and keywords…" }]);
           else if (e.type === "research") setRjob({ id: e.id, topic: e.topic });
           else if (e.type === "session") { window.dispatchEvent(new Event("rf:desk-working")); onSession?.(e.id); }
           else if (e.type === "project") push((x) => [...x, { k: "info", text: `Created project “${e.title}” — /studio/${e.id}` }]);
@@ -133,10 +133,10 @@ export function AgentChat({ projectId, onSession, className = "", starters, agen
             </div>
           : it.k === "site" ? <div key={i} className="ml-9 max-w-[82%] overflow-hidden rounded-2xl border border-white/[0.08] bg-ink-900 text-xs">
               <div className="relative h-44 w-full overflow-hidden bg-white"><iframe src={it.preview} title={it.name} sandbox="allow-scripts" className="pointer-events-none absolute left-0 top-0 h-[400%] w-[400%] origin-top-left scale-25" style={{ transform: "scale(.25)" }} /></div>
-              <div className="flex items-center gap-2 p-2.5"><b className="mr-auto truncate text-white">{it.name}</b><a className="rounded-full bg-brand-500 px-3 py-1 font-medium text-[#fff]" href={it.preview} target="_blank" rel="noreferrer">Live preview</a><a className="rounded-full border border-white/10 px-3 py-1 text-ink-300" href={it.zip}>Zip</a><a className="rounded-full border border-white/10 px-3 py-1 text-ink-300" href="/sites">Sites</a></div>
+              <div className="flex items-center gap-2 p-2.5"><b className="mr-auto truncate text-white">{it.name}</b><a className="rounded-full bg-brand-500 px-3 py-1 font-medium text-[#fff]" href={it.preview} target="_blank" rel="noreferrer">Live preview</a><a className="rounded-full border border-white/10 px-3 py-1 text-ink-300" href={it.zip}>Zip</a><PublishSite id={it.id} live={it.live} /></div>
             </div>
           : it.retry ? <div key={i} role="alert" className="mx-auto flex max-w-[90%] flex-col items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-center text-xs text-red-200">{it.text.replace(/^⚠ /, "")}<button className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-ink-950" onClick={() => { setItems((x) => x.filter((_, j) => j !== i && !(j === i - 1 && x[j].k === "user"))); send(it.retry); }}><RotateCw className="h-3.5 w-3.5" />Retry</button></div>
-          : <p key={i} className="text-center text-[11px] text-ink-500">{it.text.includes("/studio/") || it.text.includes("/youtube?r=") ? <a className="underline" href={it.text.split("— ")[1]}>{it.text.split(" — ")[0]} → open</a> : it.text}</p>)}
+          : <p key={i} className="text-center text-[11px] text-ink-500">{it.text.includes("/studio/") ? <a className="underline" href={it.text.split("— ")[1]}>{it.text.split(" — ")[0]} → open</a> : it.text}</p>)}
         {thinking && <div className="flex items-end gap-2" aria-label="Reel is typing"><span className="shrink-0"><Bot size={26} style={agent ? botFor(agent.id, agent.bot) : undefined} /></span><div className="dot-typing flex gap-1 rounded-[20px] rounded-bl-md bg-ink-800 px-4 py-3">{[0, 1, 2].map((d) => <span key={d} className="h-1.5 w-1.5 rounded-full bg-ink-300" />)}</div></div>}
         <div ref={end} />
       </div>
@@ -236,4 +236,10 @@ export function DeskButton({ ws, label, big }: { ws: string; label: string; big?
       {working && <span className="absolute right-1.5 top-1.5 flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" /></span>}
     </button>
   );
+}
+
+function PublishSite({ id, live }: { id: string; live?: string }) {
+  const [url, setUrl] = useState(live || ""); const [busy, setBusy] = useState(false);
+  if (url) return <a className="rounded-full border border-emerald-400/30 px-3 py-1 text-emerald-300" href={url} target="_blank" rel="noreferrer">Live</a>;
+  return <button data-t="site-publish" disabled={busy} className="rounded-full border border-white/10 px-3 py-1 text-ink-300 hover:text-white" onClick={async () => { setBusy(true); const r = await fetch(`/api/sites/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "publish" }) }); const j = await r.json().catch(() => ({})); setBusy(false); if (j.url) setUrl(j.url); }}>{busy ? "Publishing…" : "Publish"}</button>;
 }

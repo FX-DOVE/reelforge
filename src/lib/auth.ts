@@ -31,7 +31,7 @@ export async function signUp(email: string, password: string, name?: string, ver
   if (password.length < 8) throw new Error("Use at least 8 characters for your password.");
   if (e === adminEmail() || db.findUserByEmail(e)) throw new Error("An account with this email already exists — sign in instead.");
   const u = { id: "u_" + nanoid(10), email: e, name: (name || "").trim().slice(0, 60) || undefined, hash: await bcrypt.hash(password, 10), role: "user" as const, createdAt: new Date().toISOString(), verified, tv: 1 };
-  await db.saveUser(u);
+  if (!(await db.insertUserUnique(u))) throw new Error("An account with this email already exists — sign in instead.");
   return { id: u.id, email: u.email, role: "user", name: u.name };
 }
 export async function createSession(u: SessionUser | string) {
@@ -73,3 +73,9 @@ export async function purgeTokens(uid: string) { for (const t of db.listDocs<Tok
 export const hashPassword = (p: string) => bcrypt.hash(p, 10);
 export const comparePassword = (p: string, h: string) => bcrypt.compare(p, h);
 export async function isAdmin() { return (await currentUser())?.role === "admin"; }
+/** 401 if signed out, 403 if signed in without the admin role, else null. */
+export async function adminGate(): Promise<Response | null> {
+  const u = await currentUser();
+  if (!u) return Response.json({ error: "unauthorized" }, { status: 401 });
+  return u.role === "admin" ? null : Response.json({ error: "Admins only." }, { status: 403 });
+}

@@ -11,7 +11,7 @@ export function Admin() {
   const [data, setData] = useState<Data | null>(null);
   const [authed, setAuthed] = useState<boolean | null>(null);
   const { toast, node } = useToast();
-  const load = async () => { const r = await fetch("/api/admin/settings"); if (r.status === 401) return setAuthed(false); setAuthed(true); setData(await r.json()); };
+  const load = async () => { const r = await fetch("/api/admin/settings"); if (r.status === 403) { window.location.replace("/settings"); return; } if (r.status === 401) return setAuthed(false); setAuthed(true); setData(await r.json()); };
   useEffect(() => { load(); }, []);
   if (authed === null) return <div className="grid min-h-[60dvh] place-items-center"><Spinner className="h-6 w-6" /></div>;
   if (!authed) return <Login onDone={load} />;
@@ -30,6 +30,7 @@ export function Admin() {
       )}
       {data && [...new Set(data.fields.map((f) => f.group))].map((g) => <Group key={g} title={g} fields={data.fields.filter((f) => f.group === g)} onSaved={(d) => { setData(d); toast("Saved securely"); }} />)}
       {data && <VideoProvidersAdmin toast={toast} />}
+      {data && <UsersPanel toast={toast} />}
       {data && <UsagePanel />}
       {node}
     </div>
@@ -147,5 +148,24 @@ function Login({ onDone }: { onDone: () => void }) {
         <button className="btn-brand h-11 w-full" disabled={busy}>{busy ? <Spinner /> : "Sign in"}</button>
       </form>
     </div>
+  );
+}
+
+type URow = { id: string; email: string; name?: string; role: string; verified: boolean; createdAt: string; projects: number };
+function UsersPanel({ toast }: { toast: (t: string) => void }) {
+  const [list, setList] = useState<URow[] | null>(null);
+  const [ask, setAsk] = useState<string | null>(null);
+  const load = () => fetch("/api/admin/users").then((r) => r.json()).then((j) => setList(j.users || [])).catch(() => setList([]));
+  useEffect(() => { load(); }, []);
+  const del = async (id: string) => { setAsk(null); const r = await fetch(`/api/admin/users/${id}`, { method: "DELETE" }); const j = await r.json(); toast(r.ok ? `Deleted ${j.email} (${j.projects} projects, ${j.sites} sites)` : j.error || "Failed"); load(); };
+  return (
+    <section className="panel mt-6 p-5" data-t="admin-users">
+      <h2 className="font-semibold">Users</h2>
+      <p className="mt-1 text-sm text-ink-400">Deleting a user removes their projects, media, agents, chats, sites and notes.</p>
+      {!list ? <div className="mt-3"><Spinner /></div> : <ul className="mt-3 divide-y divide-white/[0.06] text-sm">{list.map((u) => (
+        <li key={u.id} className="flex flex-wrap items-center gap-2 py-2"><span className="min-w-0 flex-1 truncate">{u.email}{u.name ? ` · ${u.name}` : ""} <span className="text-xs text-ink-500">{u.id} · {u.projects} projects{u.verified ? "" : " · unverified"}{u.role === "admin" ? " · admin" : ""}</span></span>
+          {ask === u.id ? <><button className="btn-ghost h-8 text-red-300" onClick={() => del(u.id)}>Yes, delete</button><button className="btn-ghost h-8" onClick={() => setAsk(null)}>Cancel</button></> : <button className="btn-ghost h-8 text-red-300" onClick={() => setAsk(u.id)}>Delete</button>}</li>))}
+        {!list.length && <li className="py-2 text-ink-400">No registered users.</li>}</ul>}
+    </section>
   );
 }

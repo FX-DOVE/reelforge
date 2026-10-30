@@ -1,5 +1,3 @@
-import { Suspense } from "react";
-import { AppShell } from "@/components/AppShell";
-import { YtIntelPage } from "@/components/YtIntel";
-export const metadata = { title: "YouTube Intelligence" };
-export default function Page() { return <AppShell><Suspense><YtIntelPage /></Suspense></AppShell>; }
+import { redirect } from "next/navigation";
+/** Now an internal skill of the agent and brainstorm — the old page sends people to the dashboard. */
+export default function Page() { redirect("/dashboard"); }

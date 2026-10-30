@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { isAdmin } from "@/lib/auth";
+import { adminGate } from "@/lib/auth";
 import { MEDIA_DIR, mediaUrl } from "@/lib/db";
 import { ffmpeg, probeDuration } from "@/lib/ffmpeg";
 import { listProviders, runProvider } from "@/lib/providers/videoProviders";
@@ -14,7 +14,7 @@ export const maxDuration = 300;
 
 /** Admin-only connectivity tests. {kind:"meta"|"baseten"|"fallback"|"computer"} — never returns key material. */
 export async function POST(req: Request) {
-  if (!(await isAdmin())) return Response.json({ error: "unauthorized" }, { status: 401 });
+  { const g = await adminGate(); if (g) return g; }
   const body = await req.json().catch(() => ({})); const { kind } = body;
   const t0 = Date.now(); const ms = () => Date.now() - t0;
   try {
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
 
 /** Token & cost ledger (admin only). */
 export async function GET(req: Request) {
-  if (!(await isAdmin())) return Response.json({ error: "unauthorized" }, { status: 401 });
+  { const g = await adminGate(); if (g) return g; }
   const days = Math.min(365, Math.max(1, Number(new URL(req.url).searchParams.get("days") || 30)));
   return Response.json({ ...usageReport(days), routing: { director: getConfig("ROUTE_DIRECTOR"), review: getConfig("ROUTE_REVIEW"), agent: getConfig("ROUTE_AGENT") } });
 }
