@@ -79,3 +79,11 @@ input, textarea, select { font-size: max(16px, 1em); }
 .dot-typing span { animation: typing 1.2s infinite; } .dot-typing span:nth-child(2) { animation-delay: .15s; } .dot-typing span:nth-child(3) { animation-delay: .3s; }
 @keyframes zz { 0% { opacity: 0; transform: translate(0,0) scale(.8); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(18px,-28px) scale(1.2); } }
 .zz { animation: zz 2.4s ease-out infinite; }
+
+/* 3D bot launcher */
+@keyframes bot-float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-5px) } }
+.bot-float { animation: bot-float 3.4s ease-in-out infinite; }
+@keyframes bot-arm-wave { 0%,100% { transform: rotate(0) } 20% { transform: rotate(-38deg) } 40% { transform: rotate(-12deg) } 60% { transform: rotate(-38deg) } 80% { transform: rotate(-12deg) } }
+.bot-arm-wave { animation: bot-arm-wave 1.1s ease-in-out infinite; transform-box: view-box; }
+.bot-pop { transform: translateY(-6px) scale(1.06); }
+@media (prefers-reduced-motion: reduce) { .bot-float, .bot-arm-wave { animation: none !important; } }

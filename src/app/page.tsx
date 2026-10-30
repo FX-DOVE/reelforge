@@ -3,6 +3,13 @@ import { ArrowUpRight } from "lucide-react";
 import { PublicNav, PublicFooter, CtaBand } from "@/components/PublicSite";
 import { FilmStage, FilmStrip, FloatCard, Hero, Reveal, StepSequence } from "@/components/landing/Motion";
 
+// Landing films are served from Cloudflare R2 (LANDING_CDN_BASE, e.g. https://media.example.com/landing) with /brand as fallback.
+export const dynamic = "force-dynamic";
+const V = "2";
+const cdn = (f: string) => (process.env.LANDING_CDN_BASE ? `${process.env.LANDING_CDN_BASE.replace(/\/$/, "")}/${f}?v=${V}` : undefined);
+const vid = (f: string) => ({ src: `/brand/${f}?v=${V}`, cdn: cdn(f) });
+const img = (f: string) => cdn(f) || `/brand/${f}?v=${V}`;
+
 export const metadata = { title: "ReelForge Studio — from an idea to a finished film" };
 
 const STEPS: [string, string, string][] = [
@@ -28,26 +35,27 @@ const MODELS = [
   ["MMS & wav2vec2", "Meta’s open speech models voice each line and check it’s clear."],
 ];
 const STILLS = [
-  { src: "/brand/card-akara-tray.jpg", video: "/brand/card-akara-tray.mp4", t: "The Akara Girl · Sc 1" },
-  { src: "/brand/card-do-embrace.jpg", video: "/brand/card-do-embrace.mp4", t: "Daniel & Olivia" },
-  { src: "/brand/card-akara-confront.jpg", video: "/brand/card-akara-confront.mp4", t: "The Akara Girl · The Will" },
-  { src: "/brand/card-do-chief.jpg", video: "/brand/card-do-chief.mp4", t: "Daniel & Olivia · The Chief" },
-  { src: "/brand/card-akara-will.jpg", video: "/brand/card-akara-will.mp4", t: "The Akara Girl · Reading" },
-  { src: "/brand/card-akara-lawyer.jpg", video: "/brand/card-akara-lawyer.mp4", t: "The Akara Girl · Counsel" },
+  { src: img("card-do-plea.jpg"), video: vid("card-do-plea.mp4"), t: "Daniel & Olivia · The Plea" },
+  { src: img("card-akara-tray.jpg"), video: vid("card-akara-tray.mp4"), t: "The Akara Girl · Sc 1" },
+  { src: img("card-do-arrival.jpg"), video: vid("card-do-arrival.mp4"), t: "Daniel & Olivia · Jacinta" },
+  { src: img("card-akara-confront.jpg"), video: vid("card-akara-confront.mp4"), t: "The Akara Girl · The Will" },
+  { src: img("card-do-mother.jpg"), video: vid("card-do-mother.mp4"), t: "Daniel & Olivia · Mother" },
+  { src: img("card-akara-will.jpg"), video: vid("card-akara-will.mp4"), t: "The Akara Girl · Reading" },
+  { src: img("card-akara-lawyer.jpg"), video: vid("card-akara-lawyer.mp4"), t: "The Akara Girl · Counsel" },
 ];
 
 export default function Landing() {
   return (
     <main className="relative overflow-x-hidden bg-[#fff]">
       <PublicNav overlay />
-      <Hero video="/brand/hero-loop.mp4" poster="/brand/hero-poster.jpg" />
+      <Hero video={vid("hero-loop.mp4")} poster={img("hero-poster.jpg")} />
 
       <section className="py-6"><FilmStrip stills={STILLS} /></section>
 
       <section id="film" className="mx-auto max-w-6xl scroll-mt-20 px-5 pt-20 sm:px-8 sm:pt-28">
         <Reveal><h2 className="text-center text-4xl font-semibold tracking-[-0.03em] sm:text-6xl">Made here. Start to finish.</h2></Reveal>
         <Reveal delay={0.08}><p className="mx-auto mt-4 max-w-xl text-center text-lg text-ink-400">Written, cast, boarded, voiced and cut in ReelForge.</p></Reveal>
-        <FilmStage src="/brand/film.mp4" poster="/brand/film-poster.jpg" />
+        <FilmStage src={vid("film.mp4")} poster={img("film-poster.jpg")} />
       </section>
 
       <section id="features" className="mx-auto max-w-7xl scroll-mt-20 px-5 py-24 sm:px-8 sm:py-32">

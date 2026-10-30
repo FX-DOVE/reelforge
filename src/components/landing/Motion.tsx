@@ -4,10 +4,16 @@ import { useRef, type ReactNode, type PointerEvent } from "react";
 import { motion, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform, type Variants } from "motion/react";
 import { ArrowRight, Play } from "lucide-react";
 
+/** Landing media: CDN copy first (Cloudflare R2), local /brand copy as automatic fallback. */
+export type Media = { src: string; cdn?: string };
+function Sources({ m }: { m: Media }) {
+  return <>{m.cdn && <source src={m.cdn} type="video/mp4" />}<source src={m.src} type="video/mp4" /></>;
+}
+
 const spring = { type: "spring", stiffness: 120, damping: 20, mass: 0.8 } as const;
 
 /** Full-bleed hero: muted looping film under a soft white wash, scroll-linked zoom and fade. */
-export function Hero({ video, poster }: { video: string; poster: string }) {
+export function Hero({ video, poster }: { video: Media; poster: string }) {
   const ref = useRef<HTMLElement>(null);
   const reduce = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
@@ -18,7 +24,7 @@ export function Hero({ video, poster }: { video: string; poster: string }) {
   return (
     <section ref={ref} className="relative isolate min-h-[92svh] overflow-hidden">
       <motion.div style={{ scale, y }} className="absolute inset-0 -z-10 will-change-transform">
-        <video className="h-full w-full object-cover" src={video} poster={poster} autoPlay muted loop playsInline preload="metadata" aria-hidden />
+        <video className="h-full w-full object-cover" poster={poster} autoPlay muted loop playsInline preload="auto" aria-hidden><Sources m={video} /></video>
       </motion.div>
       <div className="absolute inset-0 -z-10 bg-gradient-to-t from-[#fff] via-[#fff]/75 to-[#fff]/10" />
       <div className="absolute inset-0 -z-10 bg-gradient-to-r from-[#fff]/85 via-[#fff]/30 to-transparent" />
@@ -68,7 +74,7 @@ export function Reveal({ children, className = "", delay = 0 }: { children: Reac
 }
 
 /** Film-strip marquee of stills with sprocket holes. Transform-only, paused under reduced motion. */
-export function FilmStrip({ stills }: { stills: { src: string; t: string; video?: string }[] }) {
+export function FilmStrip({ stills }: { stills: { src: string; t: string; video?: Media }[] }) {
   const reduce = useReducedMotion();
   const row = [...stills, ...stills];
   const holes = <div className="flex justify-between gap-3 px-2 py-1.5">{Array.from({ length: 40 }).map((_, k) => <span key={k} className="h-2.5 w-4 shrink-0 rounded-[3px] bg-white/25" />)}</div>;
@@ -80,7 +86,7 @@ export function FilmStrip({ stills }: { stills: { src: string; t: string; video?
           {row.map((s, k) => (
             <figure key={k} className="relative h-40 w-64 shrink-0 overflow-hidden rounded-sm sm:h-52 sm:w-80">
               {s.video && !reduce
-                ? <video src={s.video} poster={s.src} autoPlay muted loop playsInline preload="none" aria-label={k < stills.length ? s.t : undefined} className="h-full w-full object-cover" />
+                ? <video poster={s.src} autoPlay muted loop playsInline preload="metadata" aria-label={k < stills.length ? s.t : undefined} className="h-full w-full object-cover"><Sources m={s.video} /></video>
                 : <img src={s.src} alt={k < stills.length ? s.t : ""} loading="lazy" decoding="async" className="h-full w-full object-cover" />}
               <figcaption className="absolute bottom-1.5 left-2 font-mono text-[10px] uppercase tracking-widest text-white/70">{s.t}</figcaption>
             </figure>
@@ -116,7 +122,7 @@ export function StepSequence({ steps }: { steps: [string, string, string][] }) {
 }
 
 /** The film itself on a dark stage that scales up as it enters. */
-export function FilmStage({ src, poster }: { src: string; poster: string }) {
+export function FilmStage({ src, poster }: { src: Media; poster: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "center center"] });
@@ -124,7 +130,7 @@ export function FilmStage({ src, poster }: { src: string; poster: string }) {
   const radius = useTransform(scrollYProgress, [0, 1], [40, 28]);
   return (
     <motion.div ref={ref} style={{ scale, borderRadius: radius }} className="dark-surface mt-12 overflow-hidden bg-black shadow-[0_30px_80px_rgba(0,0,0,.25)] will-change-transform">
-      <video src={src} poster={poster} controls playsInline preload="none" className="aspect-video w-full bg-black object-cover" />
+      <video poster={poster} controls muted playsInline preload="metadata" className="aspect-video w-full bg-black object-cover"><Sources m={src} /></video>
     </motion.div>
   );
 }
