@@ -6,6 +6,7 @@ import { ArrowRight, Eye, FileUp, MessageSquareText, PenLine, Send, Pencil } fro
 import { classify } from "@/lib/screenplay";
 import { PromptBar } from "./PromptBar";
 import { Brainstorm } from "./Brainstorm";
+import { YtProjectPanel } from "../YtIntel";
 import { Spinner } from "../ui";
 import type { TabProps } from "./common";
 
@@ -108,6 +109,7 @@ export function ScriptTab({ p, act, busy, toast, setP, openBrainstorm, next }: T
           </div>
         </section>
 
+        <YtProjectPanel projectId={p.id} seed={p.idea?.split("\n")[0] || p.title} yt={p.yt} />
         <Brainstorm p={p} setP={setP} act={act} toast={toast} open={chatOpen} onScript={() => { setView("read"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
       </div>
       <PromptBar busy={writing} placeholder={p.script ? "Tell the writer how to revise the script… (e.g. add a twist in scene 2, make Ada angrier)" : "Describe your idea and the AI will write the screenplay…"}

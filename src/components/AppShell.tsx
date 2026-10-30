@@ -1,13 +1,15 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clapperboard, Shield, Globe, Settings, LogOut } from "lucide-react";
+import { Clapperboard, Shield, Globe, Settings, LogOut, BarChart3, LayoutTemplate } from "lucide-react";
 import { Avatar, logout } from "./ProfilePage";
 import { Logo } from "./ui";
 import { useEffect, useState } from "react";
 
 const BASE_NAV = [
   { href: "/dashboard", label: "Projects", icon: Clapperboard },
+  { href: "/youtube", label: "YouTube", icon: BarChart3 },
+  { href: "/sites", label: "Sites", icon: LayoutTemplate },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 const ADMIN_NAV = { href: "/admin", label: "Admin", icon: Shield };

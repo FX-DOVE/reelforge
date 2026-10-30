@@ -116,6 +116,8 @@ export interface Project {
   render: RenderJob;
   editLog: ChatMsg[];
   cover?: string;
+  /** YouTube metadata from a YouTube Intelligence report (title/description/tags to paste on upload) */
+  yt?: { reportId: string; title: string; description: string; tags: string[]; hashtags: string[]; thumbnail?: string };
   createdAt: string;
   updatedAt: string;
 }

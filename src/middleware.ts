@@ -13,6 +13,7 @@ export async function middleware(req: NextRequest) {
   const { pathname, search, searchParams } = req.nextUrl;
   const api = pathname.startsWith("/api/");
   if (api && PUBLIC_API.some((r) => r.test(pathname))) return NextResponse.next();
+  if (!api && /^\/(s|p)\//.test(pathname)) return NextResponse.next(); // agent-built sites: token preview /s/, published /p/
   if (!api && (pathname === "/admin" || pathname.startsWith("/admin/"))) return NextResponse.next();
   const user = await verifyToken(req.cookies.get(COOKIE)?.value);
   if (!api && PUBLIC_PAGES.has(pathname)) {
