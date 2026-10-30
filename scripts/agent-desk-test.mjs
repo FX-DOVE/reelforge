@@ -8,8 +8,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function client() { let cookie = ""; return async (path, opt = {}) => { const r = await fetch(BASE + path, { redirect: "manual", ...opt, headers: { "Content-Type": "application/json", ...(cookie ? { cookie } : {}), ...(opt.headers || {}) } }); const sc = r.headers.get("set-cookie"); if (sc) { const m = sc.match(/rf_session=([^;]*)/); if (m) cookie = `rf_session=${m[1]}`; } const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = t.slice(0, 100); } return { s: r.status, j, cookie }; }; }
 const st = Date.now(), pw = "Desk-test-" + st, A = client(), B = client();
 const ea = `desk-a+${st}@example.com`, eb = `desk-b+${st}@example.com`;
-const sa = await A("/api/auth/signup", { method: "POST", body: JSON.stringify({ email: ea, password: pw, name: "Desk A" }) });
-const sb = await B("/api/auth/signup", { method: "POST", body: JSON.stringify({ email: eb, password: pw, name: "Desk B" }) });
+const sa = await A("/api/auth/signup", { method: "POST", body: JSON.stringify({ email: ea, password: pw, name: "Desk A", agree: true }) });
+const sb = await B("/api/auth/signup", { method: "POST", body: JSON.stringify({ email: eb, password: pw, name: "Desk B", agree: true }) });
 ok("sign up A and B", sa.s === 200 && sb.s === 200, `${sa.s}/${sb.s}`);
 const c1 = (await A("/api/chats", { method: "POST", body: JSON.stringify({ title: "Agent One" }) })).j; const c2 = (await A("/api/chats", { method: "POST", body: JSON.stringify({ title: "Agent Two" }) })).j;
 const id1 = c1?.id || c1?.chat?.id, id2 = c2?.id || c2?.chat?.id; ok("A creates two agents", !!id1 && !!id2);

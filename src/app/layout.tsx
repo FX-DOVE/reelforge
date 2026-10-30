@@ -1,4 +1,5 @@
 import { FloatingAgent } from "@/components/AgentChat";
+import { TermsGate } from "@/components/TermsGate";
 import { DesktopWidget } from "@/components/DesktopWidget";
 import type { Metadata, Viewport } from "next";
 import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google";
@@ -33,7 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={`${inter.variable} ${display.variable} ${mono.variable}`} suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: TUNNEL }} /></head>
-      <body className="min-h-dvh font-sans">{children}{signedIn && <><FloatingAgent /><DesktopWidget /></>}</body>
+      <body className="min-h-dvh font-sans">{children}{signedIn && <><FloatingAgent /><DesktopWidget /><TermsGate /></>}</body>
     </html>
   );
 }

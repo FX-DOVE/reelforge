@@ -5,7 +5,7 @@ import { COOKIE, verifyToken } from "@/lib/session";
  *  (route handlers then check project ownership). */
 const PUBLIC_API = [/^\/api\/auth\//, /^\/api\/status$/, /^\/api\/admin\/(login|logout)$/, /^\/api\/recover$/];
 /** The public marketing site. Every other page (dashboard, studio, settings, docs…) needs a session. /admin has its own login. */
-const PUBLIC_PAGES = new Set(["/", "/pricing", "/about", "/faq", "/login", "/signup", "/forgot", "/reset"]);
+const PUBLIC_PAGES = new Set(["/", "/pricing", "/about", "/faq", "/login", "/signup", "/forgot", "/reset", "/terms", "/privacy"]);
 const AUTH_PAGES = new Set(["/login", "/signup", "/forgot"]);
 const safeNext = (n: string | null) => (n && n.startsWith("/") && !n.startsWith("//") ? n : "/dashboard");
 

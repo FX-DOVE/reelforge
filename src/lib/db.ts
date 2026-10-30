@@ -7,7 +7,7 @@ export const DATA_DIR = path.resolve(process.env.DATA_DIR || "./data");
 export const MEDIA_DIR = path.join(DATA_DIR, "media");
 const DB_FILE = path.join(DATA_DIR, "db.json");
 
-export interface UserRec { id: string; email: string; name?: string; hash: string; role: "admin" | "user"; createdAt: string; verified?: boolean; tv?: number; avatar?: string }
+export interface UserRec { id: string; email: string; name?: string; hash: string; role: "admin" | "user"; createdAt: string; verified?: boolean; tv?: number; avatar?: string; termsAcceptedAt?: string; termsVersion?: string }
 interface DBShape { projects: Record<string, Project>; settings: Record<string, string>; users?: Record<string, UserRec>; memory?: Record<string, UserMemory>; docs?: Record<string, Record<string, { id: string; ownerId: string; updatedAt?: string }>> }
 
 let cache: DBShape | null = null;

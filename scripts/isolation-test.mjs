@@ -13,7 +13,7 @@ function client() {
 }
 const A = client(), B = client(), pw = "Iso-test-" + stamp;
 const ea = `iso-a+${stamp}@example.com`, eb = `iso-b+${stamp}@example.com`;
-const su = async (c, e, n) => (await c("/api/auth/signup", { method: "POST", body: JSON.stringify({ email: e, password: pw, name: n }) }));
+const su = async (c, e, n) => (await c("/api/auth/signup", { method: "POST", body: JSON.stringify({ email: e, password: pw, name: n, agree: true }) }));
 const ra = await su(A, ea, "Iso A"), rb = await su(B, eb, "Iso B");
 ok("sign up A and B", ra.s === 200 && rb.s === 200, `${ra.s}/${rb.s}${ra.j?.verify ? " verify-required" : ""}`);
 if (ra.j?.verify) { console.log("Email verification is on — run against a server without email, or verify manually."); process.exit(2); }

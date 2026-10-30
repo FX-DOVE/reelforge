@@ -29,7 +29,7 @@ export async function PublicNav({ overlay = false }: { overlay?: boolean }) {
 export function PublicFooter() {
   const cols: [string, { href: string; label: string }[]][] = [
     ["Product", [{ href: "/#features", label: "Features" }, { href: "/#how", label: "How it works" }, { href: "/#models", label: "Meta models" }, { href: "/pricing", label: "Pricing" }]],
-    ["Company", [{ href: "/about", label: "About" }, { href: "/faq", label: "FAQ" }]],
+    ["Company", [{ href: "/about", label: "About" }, { href: "/faq", label: "FAQ" }, { href: "/terms", label: "Terms" }, { href: "/privacy", label: "Privacy" }]],
     ["Account", [{ href: "/signup", label: "Sign up" }, { href: "/login", label: "Log in" }]],
   ];
   return (
