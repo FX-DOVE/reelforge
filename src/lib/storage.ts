@@ -54,6 +54,24 @@ export function presign(c: R2Conf, key: string, expires = 3600) {
   return `${u.origin}${u.pathname}?${qs}&X-Amz-Signature=${sig}`;
 }
 
+/** Presigned PUT URL (for workers that upload results straight into the bucket). */
+export function presignPut(c: R2Conf, key: string, expires = 3600) {
+  const u = new URL(`${c.endpoint}/${c.bucket}/${keyPath(key)}`);
+  const amz = new Date().toISOString().replace(/[-:]|\.\d{3}/g, ""); const date = amz.slice(0, 8); const scope = `${date}/auto/s3/aws4_request`;
+  const q: [string, string][] = [["X-Amz-Algorithm", "AWS4-HMAC-SHA256"], ["X-Amz-Credential", `${c.key}/${scope}`], ["X-Amz-Date", amz], ["X-Amz-Expires", String(expires)], ["X-Amz-SignedHeaders", "host"]];
+  const qs = q.sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${enc(k)}=${enc(v)}`).join("&");
+  const creq = ["PUT", u.pathname, qs, `host:${u.host}\n`, "host", "UNSIGNED-PAYLOAD"].join("\n");
+  const sig = crypto.createHmac("sha256", signingKey(c.secret, date)).update(["AWS4-HMAC-SHA256", amz, scope, h(creq)].join("\n")).digest("hex");
+  return `${u.origin}${u.pathname}?${qs}&X-Amz-Signature=${sig}`;
+}
+/** Keep the story (script, scenes, shot lines, dialogue, references) in the bucket next to the media. */
+export async function snapshotStory(pid: string): Promise<boolean> {
+  if (!r2Enabled()) return false; const p = db.getProject(pid); if (!p) return false;
+  const body = Buffer.from(JSON.stringify(p, null, 1));
+  const md5 = crypto.createHash("md5").update(body).digest("hex");
+  const head = await r2Head(pid + "/story.json"); if (head?.etag === md5) return true;
+  const r = await r2Req(r2Conf()!, "PUT", `media/${pid}/story.json`, body, "application/json"); return r.ok;
+}
 const g = globalThis as unknown as { __r2Up?: Set<string> };
 const uploaded = (g.__r2Up ||= new Set());
 /** URL to serve a media file from: presigned R2 URL (uploading on first use) or null → serve locally. */
@@ -145,7 +163,9 @@ export async function offloadOnce(minAgeMs = 10 * 60_000): Promise<{ uploaded: n
   const s = { uploaded: 0, dropped: 0, failed: 0, bytes: 0 };
   if (!r2Enabled()) return s; const c = r2Conf()!;
   for (const pid of fs.existsSync(MEDIA_DIR) ? fs.readdirSync(MEDIA_DIR) : []) {
-    const dir = path.join(MEDIA_DIR, pid); if (!fs.statSync(dir).isDirectory() || (pid !== "_admin" && busy(pid))) continue;
+    const dir = path.join(MEDIA_DIR, pid); if (!fs.statSync(dir).isDirectory()) continue;
+    if (pid !== "_admin") await snapshotStory(pid).catch(() => false);
+    if (pid !== "_admin" && busy(pid)) continue;
     for (const abs of walk(dir)) {
       try {
         if (/\.part\d*$|\.tmp$/.test(abs)) continue;

@@ -55,7 +55,7 @@ export function VideoTab({ p, act, busy, voices, patch, next }: TabProps & { pat
                 <label className="block"><span className="label">Video provider</span>
                   <select className="input h-10" value={p.videoProvider || "auto"} onChange={(e) => patch({ videoProvider: e.target.value })}>
                     <option value="auto">Auto — Admin fallback order</option>
-                    {provs.map((v) => <option key={v.id} value={v.id} disabled={!v.ready}>{v.name} · {v.model}{v.ready ? "" : " (no key)"}</option>)}
+                    {provs.map((v) => <option key={v.id} value={v.id} disabled={!v.ready}>{v.type === "motion" ? v.name : `${v.name} · ${v.model}`}{v.ready ? "" : " (no key)"}</option>)}
                   </select></label>
                 {chosen && <p className="text-xs text-ink-400">Using <b className="text-white">{chosen.name}</b> · max {chosen.maxDuration}s per clip · {chosen.firstLast ? "first + last frame" : "first frame only"}{chosen.aspects.includes(p.aspect) ? "" : ` · ⚠ ${p.aspect} not listed for this provider`}. Estimate for {framedShots.length} framed shot(s): <b className="text-white">{estSecs}s</b>{estUsd !== undefined ? <> · ~<b className="text-white">${estUsd.toFixed(2)}</b></> : " · cost unknown (set cost/sec in Admin)"}. Failed clips retry, then fall back to the next provider.</p>}
                 <div className="flex flex-wrap gap-2">

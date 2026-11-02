@@ -6,6 +6,7 @@ export interface FieldDef { key: string; label: string; secret: boolean; group: 
 // Everything an admin can configure. Secrets are AES-256-GCM encrypted at rest and never sent to the browser.
 export const FIELDS: FieldDef[] = [
   { key: "META_ONLY", label: "Meta models only (hackathon rules)", secret: false, group: "Hackathon rules", default: "on", options: ["on", "off"], env: "META_ONLY", help: "ON: every model called at runtime is a Meta model (Muse Spark / Muse Wonder / Muse Image, plus Meta's open Muse Spark weights on Baseten). Non-Meta LLM fallbacks and third-party video models are disabled; video is made with local FFmpeg motion (Ken Burns, parallax, crossfades) over Muse Image stills. The code is kept behind this flag." },
+  { key: "VIDEO_MOTION_BETA", label: "Video motion (beta)", secret: false, group: "Hackathon rules", default: "off", options: ["off", "on"], help: "OFF by default and OFF during judging. ON: image-to-video shots animate the Meta Muse Image stills with LTX-2.5 (Lightricks, open weights, NON-Meta) on a self-hosted Runpod serverless GPU, with native synchronized audio. Built for production until a Meta video API exists. Needs the \"Video motion\" provider (Admin → Video providers) with its Runpod key. Any failure falls back to the static stills." },
   { key: "META_API_KEY", label: "Meta Model API key", secret: true, group: "Meta Model API", env: "META_API_KEY", help: "dev.meta.ai → API keys. Enables live Muse Spark / Wonder / Image." },
   { key: "META_BASE_URL", label: "Base URL", secret: false, group: "Meta Model API", default: "https://api.meta.ai/v1", env: "META_BASE_URL" },
   { key: "META_TEXT_MODEL", label: "General model (chat, extraction)", secret: false, group: "Meta Model API", default: "muse-spark-1.3", options: ["muse-spark-1.3", "muse-wonder-1.0"] },
@@ -122,6 +123,7 @@ export type Provider = "meta" | "baseten" | "fallback";
 export type LlmTask = "director" | "review" | "agent" | "general";
 /** Hackathon rules: only Meta models at runtime (on by default). */
 export const metaOnly = () => (getConfig("META_ONLY") || "on") !== "off";
+export const motionBeta = () => getConfig("VIDEO_MOTION_BETA") === "on";
 export const META_ONLY_NOTE = "Disabled under the hackathon rules (Meta models only).";
 const isMetaModel = (m?: string) => /muse|^meta-models\/|llama/i.test(m || "");
 export const providerLive = (x: Provider) => (x === "meta" ? !!getConfig("META_API_KEY")
@@ -141,5 +143,5 @@ export const contributorOn = () => !!getConfig("META_API_KEY") && getConfig("MET
 
 /** true when a real (non-demo) video provider is configured — read lazily to avoid an import cycle */
 function hasVideoProvider() {
-  try { const raw = db.getSetting("VIDEO_PROVIDERS"); const list = raw ? (JSON.parse(raw) as { id: string; type: string; enabled: boolean }[]) : []; if (metaOnly()) return false; return list.some((p) => p.enabled && p.type !== "mock" && (p.type === "ltx-comfy" || !!db.getSetting("VIDEO_KEY_" + p.id))) || (getConfig("VIDEO_PROVIDER") === "veo" && !!getConfig("GEMINI_API_KEY")); } catch { return false; }
+  try { const raw = db.getSetting("VIDEO_PROVIDERS"); const list = raw ? (JSON.parse(raw) as { id: string; type: string; enabled: boolean }[]) : []; if (getConfig("VIDEO_MOTION_BETA") === "on" && list.some((p) => p.enabled && p.type === "runpod" && !!db.getSetting("VIDEO_KEY_" + p.id))) return true; if (metaOnly()) return false; return list.some((p) => p.enabled && p.type !== "mock" && p.type !== "runpod" && (p.type === "ltx-comfy" || !!db.getSetting("VIDEO_KEY_" + p.id))) || (getConfig("VIDEO_PROVIDER") === "veo" && !!getConfig("GEMINI_API_KEY")); } catch { return false; }
 }

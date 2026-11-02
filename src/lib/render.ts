@@ -4,7 +4,9 @@ import path from "node:path";
 import { db, mediaPath, mediaUrl, projectMediaDir } from "./db";
 import { ffmpeg, probeDuration } from "./ffmpeg";
 import { speak } from "./providers/tts";
-import { chain, estimate, listProviders, runProvider } from "./providers/videoProviders";
+import { chain, estimate, listProviders, runProvider, shownName } from "./providers/videoProviders";
+import { execFileSync } from "node:child_process";
+const hasAudio = (f: string) => { try { return execFileSync("ffprobe", ["-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", f], { timeout: 15000 }).toString().trim().length > 0; } catch { return false; } };
 import { chat, llmLive, structured } from "./providers/meta";
 import { findShot, genreFor } from "./studio";
 import { genreBrief } from "./genres";
@@ -101,8 +103,17 @@ export async function voiceAll(p: Project) {
 
 /** Generate one clip now: the project's provider first, then the Admin fallback order (demo motion last), with retries. */
 /** Video-provider prompt: camera + action + screen direction + the genre motion grammar and its AI-video countermeasures. */
-export function clipPrompt(p: Project, sh: Shot) {
+export function clipPrompt(p: Project, sh: Shot, withSound = false) {
   const g = genreFor(p);
+  if (withSound) {
+    // native-audio motion: the shot's story line drives the picture, its dialogue drives the voice, the scene drives the ambience
+    const sc = p.scenes.find((x) => x.shots.some((y) => y.id === sh.id));
+    const line = (sh.dialogue || "").replace(/"/g, "'").trim();
+    return [`${sh.camera}. ${sh.description}.`, sh.screen ? `Screen direction: ${sh.screen}.` : "",
+      line ? `${sh.speaker || "The character"} says: "${line}" — clear voice, lips in sync, natural emotion.` : sh.narration ? "No one speaks on screen." : "",
+      `Sound: natural ambience of ${sc?.heading || "the location"}${sc?.summary ? ` (${sc.summary.slice(0, 160)})` : ""}, subtle foley matching the action; no music.`,
+      "Keep faces, wardrobe and props identical to the start frame; one continuous action; no new people; no on-screen text.", g ? genreBrief(g, "video") : ""].filter(Boolean).join(" ").slice(0, 1400);
+  }
   return [`${sh.camera}. ${sh.description}.`, sh.screen ? `Screen direction: ${sh.screen}.` : "", sh.dialogue ? `${sh.speaker} speaks one short line; lips move naturally, others listen.` : "", "Keep faces, wardrobe and props identical to the start frame; one continuous action; no new people; no on-screen text.", g ? genreBrief(g, "video") : ""].filter(Boolean).join(" ").slice(0, 1400);
 }
 export async function clipShot(p: Project, shotId: string, onJob?: (j: NonNullable<Shot["clipJob"]>) => unknown) {
@@ -116,14 +127,14 @@ export async function clipShot(p: Project, shotId: string, onJob?: (j: NonNullab
   for (const prov of chain(p.videoProvider)) {
     for (let attempt = 1; attempt <= retries + 1; attempt++) {
       const est = estimate(prov, sh.durationSec);
-      await onJob?.({ state: "running", provider: prov.name, attempt, progress: 2, estUsd: est.usd });
+      await onJob?.({ state: "running", provider: shownName(prov), attempt, progress: 2, estUsd: est.usd });
       try {
-        await runProvider(prov, { startFrame: mediaPath(start.url), endFrame: end ? mediaPath(end.url) : undefined, prompt: clipPrompt(p, sh), aspect: p.aspect, durationSec: sh.durationSec, outFile: file, projectId: p.id, shotId }, (pct) => { void onJob?.({ state: "running", provider: prov.name, attempt, progress: Math.round(pct), estUsd: est.usd }); });
+        await runProvider(prov, { startFrame: mediaPath(start.url), endFrame: end ? mediaPath(end.url) : undefined, prompt: clipPrompt(p, sh, prov.type === "runpod"), aspect: p.aspect, durationSec: sh.durationSec, outFile: file, projectId: p.id, shotId }, (pct) => { void onJob?.({ state: "running", provider: shownName(prov), attempt, progress: Math.round(pct), estUsd: est.usd }); });
         record("video", prov.type === "mock" ? "Demo" : prov.name, prov.model, undefined, 0, est.usd);
-        await db.update(p.id, (x) => { const t = findShot(x, shotId); t.clipUrl = mediaUrl(file); t.clipProvider = prov.name; });
-        return { url: mediaUrl(file), provider: prov.id, name: prov.name, attempt, errors };
+        await db.update(p.id, (x) => { const t = findShot(x, shotId); t.clipUrl = mediaUrl(file); t.clipProvider = shownName(prov); });
+        return { url: mediaUrl(file), provider: prov.id, name: shownName(prov), attempt, errors };
       } catch (e) {
-        errors.push(`${prov.name} #${attempt}: ${(e as Error).message.slice(0, 160)}`);
+        errors.push(`${shownName(prov)} #${attempt}: ${(e as Error).message.slice(0, 160)}`);
         if (/no API key|HTTP 40[13]|HTTP 422|unsupported/i.test((e as Error).message)) break; // don't retry config errors
         if (attempt <= retries) await new Promise((r) => setTimeout(r, 3000 * attempt));
       }
@@ -141,11 +152,11 @@ export async function queueClips(pid: string, shotIds: string[]) {
   for (const id of shotIds) {
     if (vq.some((q) => q.pid === pid && q.shotId === id)) continue;
     const sh = findShot(p, id);
-    await setJob(pid, id, { state: "queued", provider: prov?.name, attempt: 0, progress: 0, error: undefined, estUsd: prov ? estimate(prov, sh.durationSec).usd : undefined });
+    await setJob(pid, id, { state: "queued", provider: prov ? shownName(prov) : undefined, attempt: 0, progress: 0, error: undefined, estUsd: prov ? estimate(prov, sh.durationSec).usd : undefined });
     vq.push({ pid, shotId: id });
   }
   if (!vqRunning) void drain();
-  return { queued: shotIds.length, provider: prov?.name };
+  return { queued: shotIds.length, provider: prov ? shownName(prov) : undefined };
 }
 /** Drop a deleted project's clips from the queue. */
 export function dropProjectClips(pid: string) { for (let i = vq.length - 1; i >= 0; i--) if (vq[i].pid === pid) vq.splice(i, 1); }
@@ -166,7 +177,7 @@ export function videoEstimate(p: Project) {
   const shots = shotsOf(p).filter((s) => s.activeStart);
   let secs = 0, usd = 0, priced = true;
   for (const s of shots) { const e = estimate(prov, s.durationSec); secs += e.seconds; if (e.usd === undefined) priced = false; else usd += e.usd; }
-  return { provider: prov?.name, shots: shots.length, seconds: secs, usd: priced ? +usd.toFixed(2) : undefined };
+  return { provider: prov ? shownName(prov) : undefined, shots: shots.length, seconds: secs, usd: priced ? +usd.toFixed(2) : undefined };
 }
 
 /** Subtitle cues: ≤ 42 characters per line, ≤ 2 lines per cue; long lines split across cues in proportion to their length. */
@@ -261,11 +272,11 @@ export async function renderProject(projectId: string) {
       const dur = segDur(sh, adur);
       const out = path.join(work, `seg${String(i).padStart(3, "0")}.mp4`);
       const vIn: string[] = [];
-      let vf: string;
+      let vf: string; let clipA = false;
       const hf = !(p.outputType === "video" && sh.clipUrl) && start ? await animateShot(p, sh, dur).catch((e) => { hfFails.push(`shot ${i + 1}: ${(e as Error).message.slice(0, 80)}`); return null; }) : null;
       if (hf) { hfUsed++; vIn.push("-i", hf); vf = `[0:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},fps=${fps},setsar=1,tpad=stop_mode=clone:stop_duration=1,trim=duration=${dur},setpts=PTS-STARTPTS,format=yuv420p[v]`; }
       else if (p.outputType === "video" && sh.clipUrl && fs.existsSync(mediaPath(sh.clipUrl))) {
-        vIn.push("-stream_loop", "-1", "-ss", String(trimS), "-i", mediaPath(sh.clipUrl));
+        vIn.push("-stream_loop", "-1", "-ss", String(trimS), "-i", mediaPath(sh.clipUrl)); clipA = hasAudio(mediaPath(sh.clipUrl));
         vf = `[0:v]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},fps=${fps},setsar=1,trim=duration=${dur},setpts=PTS-STARTPTS,format=yuv420p[v]`;
       } else {
         const img = start ? mediaPath(start.url) : null;
@@ -284,7 +295,11 @@ export async function renderProject(projectId: string) {
       }
       const aIdx = vIn.filter((x) => x === "-i").length;
       const aIn = audio ? ["-i", audio] : ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"];
-      const af = audio ? `[${aIdx}:a]aresample=44100,aformat=channel_layouts=stereo,adelay=250|250,apad,atrim=duration=${dur}[a]` : `[${aIdx}:a]atrim=duration=${dur}[a]`;
+      // clips with native sound (Video motion beta): keep their ambience/voices, ducked under any TTS line
+      const nat = `[0:a]aresample=44100,aformat=channel_layouts=stereo,apad,atrim=duration=${dur}`;
+      const af = audio
+        ? clipA ? `${nat},volume=0.35[n];[${aIdx}:a]aresample=44100,aformat=channel_layouts=stereo,adelay=250|250,apad,atrim=duration=${dur}[t];[n][t]amix=inputs=2:duration=first:normalize=0[a]` : `[${aIdx}:a]aresample=44100,aformat=channel_layouts=stereo,adelay=250|250,apad,atrim=duration=${dur}[a]`
+        : clipA ? `${nat}[a]` : `[${aIdx}:a]atrim=duration=${dur}[a]`;
       await ffmpeg([...vIn, ...aIn, "-filter_complex", `${vf};${af}`, "-map", "[v]", "-map", "[a]", "-t", String(dur), "-r", String(fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-c:a", "aac", "-b:a", "160k", out]);
       segs.push(out);
       const line = sh.narration || sh.dialogue || "";

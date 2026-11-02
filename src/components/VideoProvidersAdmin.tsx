@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, BookOpen, Film, KeyRound, Plus, Save, Trash2 } from "lucide-react";
 import { Spinner } from "./ui";
 
-type VType = "openai" | "ltx" | "ltx-comfy" | "minimax" | "veo" | "fal" | "replicate" | "mock";
+type VType = "openai" | "ltx" | "ltx-comfy" | "minimax" | "veo" | "fal" | "replicate" | "runpod" | "mock";
 type Prov = { id: string; name: string; type: VType; enabled: boolean; baseUrl: string; model: string; maxDuration: number; aspects: string[]; firstLast: boolean; i2v: boolean; costPerSec?: number; blocked?: string; mapping?: string; workflow?: string; resolution?: string; key?: string };
-const TYPE_LABEL: Record<VType, string> = { openai: "Generic OpenAI-compatible", ltx: "LTX-Video 2.x API server", "ltx-comfy": "LTX-Video via ComfyUI", minimax: "MiniMax Hailuo", veo: "Google Veo", fal: "fal.ai", replicate: "Replicate", mock: "Demo motion (local)" };
+const TYPE_LABEL: Record<VType, string> = { openai: "Generic OpenAI-compatible", ltx: "LTX-Video 2.x API server", "ltx-comfy": "LTX-Video via ComfyUI", minimax: "MiniMax Hailuo", veo: "Google Veo", fal: "fal.ai", replicate: "Replicate", runpod: "Video motion (beta) — LTX-2.5 via Runpod, non-Meta, off during judging", mock: "Demo motion (local)" };
 const ASPECTS = ["16:9", "9:16", "1:1", "4:5"];
 
 /** Admin → Video providers: add/edit/reorder (fallback order), encrypted keys, 2-second test clip per provider. */

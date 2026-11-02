@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { db } from "../db";
+import { db, MEDIA_DIR } from "../db";
 import { decrypt, encrypt, mask } from "../crypto";
-import { getConfig, metaOnly, META_ONLY_NOTE } from "../config";
+import { getConfig, metaOnly, motionBeta, META_ONLY_NOTE } from "../config";
 import { aspectSize, type Aspect } from "../types";
 import { mockVideo, veoVideo, type VideoRequest } from "./video";
 
@@ -11,7 +11,7 @@ import { mockVideo, veoVideo, type VideoRequest } from "./video";
  * The provider list is stored as JSON (no secrets); each provider's API key is stored separately, AES-256-GCM encrypted,
  * and never sent to the browser. Array order = fallback order.
  */
-export type VideoType = "openai" | "ltx" | "ltx-comfy" | "minimax" | "veo" | "fal" | "replicate" | "mock";
+export type VideoType = "openai" | "ltx" | "ltx-comfy" | "minimax" | "veo" | "fal" | "replicate" | "runpod" | "mock";
 export interface VideoProviderCfg {
   id: string; name: string; type: VideoType; enabled: boolean;
   baseUrl: string; model: string; maxDuration: number; aspects: Aspect[];
@@ -30,6 +30,7 @@ export const DEFAULT_MAPPING = {
   done: ["completed", "succeeded", "success"], failed: ["failed", "error", "cancelled"], urlPath: "", errorPath: "error.message",
 };
 export const PRESETS: Record<Exclude<VideoType, "mock">, Partial<VideoProviderCfg>> = {
+  runpod: { name: "Video motion (beta)", baseUrl: "https://api.runpod.ai/v2/ENDPOINT_ID", model: "ltx-2.5-distilled", maxDuration: 5, aspects: ["16:9", "9:16", "1:1", "4:5"], firstLast: false, i2v: true, resolution: "640x352", costPerSec: 0.02 },
   openai: { name: "OpenAI-compatible video", baseUrl: "https://api.openai.com/v1", model: "sora-2", maxDuration: 12, aspects: ["16:9", "9:16"], firstLast: false, i2v: true, mapping: JSON.stringify(DEFAULT_MAPPING, null, 2) },
   ltx: { name: "LTX-Video 2.x (API server)", baseUrl: "https://api.ltx.io", model: "ltx-2-3-fast", maxDuration: 10, aspects: ["16:9", "9:16"], firstLast: true, i2v: true, resolution: "1920x1080", costPerSec: 0.04 },
   "ltx-comfy": { name: "LTX-Video via ComfyUI (self-hosted GPU)", baseUrl: "http://YOUR-POD:8188", model: "ltx-2", maxDuration: 10, aspects: ["16:9", "9:16", "1:1", "4:5"], firstLast: true, i2v: true, costPerSec: 0 },
@@ -40,6 +41,14 @@ export const PRESETS: Record<Exclude<VideoType, "mock">, Partial<VideoProviderCf
 };
 const DEMO: VideoProviderCfg = { id: "demo", name: "Motion over Muse Image stills (local FFmpeg)", type: "mock", enabled: true, baseUrl: "", model: "ffmpeg", maxDuration: 10, aspects: ["16:9", "9:16", "1:1", "4:5"], firstLast: true, i2v: true, costPerSec: 0 };
 
+/** Hackathon gating: Meta-only blocks third-party video, except the admin "Video motion (beta)" switch for the self-hosted Runpod provider. */
+export function allowed(p: { type: VideoType; id: string; enabled?: boolean }) {
+  if (p.type === "mock") return true;
+  if (p.type === "runpod") return motionBeta() && !!providerKey(p.id);
+  return !metaOnly() && (p.type === "ltx-comfy" || !!providerKey(p.id));
+}
+/** What regular users see: never a model or vendor name for the beta motion provider. */
+export const shownName = (p: { type: string; name: string }) => (p.type === "runpod" ? "Video motion" : p.name);
 export function listProviders(): VideoProviderCfg[] {
   const raw = db.getSetting("VIDEO_PROVIDERS");
   let list: VideoProviderCfg[] = [];
@@ -62,13 +71,13 @@ export async function saveProviders(list: VideoProviderCfg[], keys: Record<strin
   }
 }
 /** Admin view: keys masked. Public view (projects): no key info beyond "has key". */
-export const adminView = () => listProviders().map((p) => ({ ...p, key: providerKey(p.id) ? mask(providerKey(p.id)!) : "", blocked: metaOnly() && p.type !== "mock" ? META_ONLY_NOTE : undefined }));
-export const publicView = () => listProviders().filter((p) => p.enabled && (p.type === "mock" || !metaOnly())).map(({ id, name, type, model, maxDuration, aspects, firstLast, i2v, costPerSec }) => ({ id, name, type, model, maxDuration, aspects, firstLast, i2v, costPerSec, ready: type === "mock" || !!providerKey(id) || type === "ltx-comfy" }));
+export const adminView = () => listProviders().map((p) => ({ ...p, key: providerKey(p.id) ? mask(providerKey(p.id)!) : "", blocked: p.type === "runpod" ? (motionBeta() ? undefined : "Off — turn on Settings → Hackathon rules → Video motion (beta)") : metaOnly() && p.type !== "mock" ? META_ONLY_NOTE : undefined }));
+export const publicView = () => listProviders().filter((p) => p.enabled && allowed(p)).map(({ id, name, type, model, maxDuration, aspects, firstLast, i2v, costPerSec }) => type === "runpod" ? { id, name: "Video motion", type: "motion", model: "idea → finished film", maxDuration, aspects, firstLast, i2v, costPerSec, ready: true } : ({ id, name, type, model, maxDuration, aspects, firstLast, i2v, costPerSec, ready: type === "mock" || !!providerKey(id) || type === "ltx-comfy" }));
 
 /** Ordered list to try for a project: its chosen provider first, then the rest in Admin order; demo motion last. */
 export function chain(choice?: string) {
   // hackathon rules: no third-party video models — Ken Burns / parallax / crossfade motion over Muse Image stills only
-  const all = listProviders().filter((p) => p.enabled && (p.type === "mock" || (!metaOnly() && (p.type === "ltx-comfy" || providerKey(p.id)))));
+  const all = listProviders().filter((p) => p.enabled && allowed(p));
   const first = all.filter((p) => p.id === choice);
   const rest = all.filter((p) => p.id !== choice && p.type !== "mock");
   return [...first, ...rest, ...all.filter((p) => p.type === "mock" && p.id !== choice)];
@@ -235,11 +244,48 @@ async function replicate(c: VideoProviderCfg, key: string, r: VideoRequest, on: 
   return download(Array.isArray(st.output) ? st.output[0] : st.output, r.outFile);
 }
 
+/** Self-hosted LTX-2.5 (native audio) on a Runpod serverless endpoint. Inputs come from R2 (presigned GET), the clip goes straight to R2 (presigned PUT). */
+async function runpodMotion(c: VideoProviderCfg, key: string, r: VideoRequest, on: Progress) {
+  const st = await import("../storage");
+  const base = c.baseUrl.replace(/\/+$/, ""); const H = { Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+  const [rw, rh] = (c.resolution || "640x352").split("x").map(Number);
+  const portrait = r.aspect === "9:16" || r.aspect === "4:5"; const square = r.aspect === "1:1";
+  const width = square ? Math.min(rw, rh) : portrait ? rh : rw, height = square ? Math.min(rw, rh) : portrait ? rw : rh;
+  const secs = Math.max(2, Math.min(r.durationSec, c.maxDuration)); const num_frames = Math.round((secs * 24) / 8) * 8 + 1;
+  const input: Record<string, unknown> = { prompt: r.prompt, width, height, num_frames, seed: Math.floor(Math.random() * 1e6) };
+  const relOf = (f: string) => path.relative(MEDIA_DIR, f).split(path.sep).join("/");
+  const startRel = relOf(r.startFrame), outKey = "media/" + relOf(r.outFile);
+  const conf = st.r2Enabled() ? st.r2Conf() : null;
+  if (conf) {
+    if (!fs.existsSync(r.startFrame)) st.hydrateSync(startRel, r.startFrame);
+    input.image_url = await st.remoteUrl(startRel, mime(r.startFrame));
+    input.put_url = st.presignPut(conf, outKey, 3600);
+  }
+  if (!input.image_url) { if (!fs.existsSync(r.startFrame)) throw new Error("start frame missing"); input.image_b64 = fs.readFileSync(r.startFrame).toString("base64"); delete input.put_url; }
+  const job = await json(await fetch(base + "/run", { method: "POST", headers: H, body: JSON.stringify({ input, policy: { executionTimeout: 900000 } }) }), "motion submit");
+  if (!job.id) throw new Error("motion: no job id");
+  for (let i = 0; i < 180; i++) {
+    await sleep(i < 6 ? 5000 : 10000); on(Math.min(92, 5 + i * 2));
+    const s = await json(await fetch(`${base}/status/${job.id}`, { headers: H }), "motion status");
+    if (["FAILED", "CANCELLED", "TIMED_OUT"].includes(s.status)) throw new Error(`motion ${String(s.status).toLowerCase()}`);
+    if (s.status === "COMPLETED") {
+      const o = s.output || {};
+      if (o.error) throw new Error(`motion: ${String(o.error).slice(0, 120)}`);
+      if (o.video_b64) fs.writeFileSync(r.outFile, Buffer.from(o.video_b64, "base64"));
+      else if (o.uploaded && conf) await download(st.presign({ ...conf, publicBase: undefined }, outKey, 600), r.outFile);
+      else throw new Error("motion: empty result");
+      return;
+    }
+  }
+  await fetch(`${base}/cancel/${job.id}`, { method: "POST", headers: H }).catch(() => {});
+  throw new Error("motion timed out");
+}
+
 export async function runProvider(c: VideoProviderCfg, r: VideoRequest, on: Progress = () => {}) {
-  if (metaOnly() && c.type !== "mock") throw new Error(`${c.name}: ${META_ONLY_NOTE}`);
+  if (!allowed(c)) throw new Error(c.type === "runpod" ? "Video motion (beta) is off" : `${c.name}: ${META_ONLY_NOTE}`);
   const req = { ...r, durationSec: Math.max(1, Math.min(r.durationSec, c.maxDuration)), endFrame: c.firstLast ? r.endFrame : undefined };
   const key = providerKey(c.id);
-  if (c.type !== "mock" && c.type !== "ltx-comfy" && !key) throw new Error(`${c.name}: no API key saved`);
+  if (c.type !== "mock" && c.type !== "ltx-comfy" && !key) throw new Error(`${shownName(c)}: no API key saved`);
   switch (c.type) {
     case "mock": {
       // HyperFrames first (local, cached by spec hash), FFmpeg motion as the fallback
@@ -253,5 +299,6 @@ export async function runProvider(c: VideoProviderCfg, r: VideoRequest, on: Prog
     case "minimax": return minimax(c, key!, req, on);
     case "fal": return fal(c, key!, req, on);
     case "replicate": return replicate(c, key!, req, on);
+    case "runpod": return runpodMotion(c, key!, req, on);
   }
 }
