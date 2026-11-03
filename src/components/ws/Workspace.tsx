@@ -5,7 +5,7 @@ import { FilmStylePicker } from "../FilmStylePicker";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Clapperboard, Film, ScrollText, Scissors, Settings2, Users, Workflow } from "lucide-react";
+import { ArrowLeft, Clapperboard, Film, ScrollText, Scissors, Menu, Settings2, Users, Workflow } from "lucide-react";
 import type { Project } from "@/lib/types";
 import { Spinner, useToast, Modal, Segmented } from "../ui";
 import { StatusPill } from "../AppShell";
@@ -18,6 +18,7 @@ import { StoryboardTab } from "./StoryboardTab";
 import { VideoTab } from "./VideoTab";
 import { EditTab } from "./EditTab";
 import { PipelineView } from "./PipelineView";
+import { ProjectRail } from "./ProjectRail";
 
 const TABS = [
   { id: "script", label: "Script", icon: ScrollText },
@@ -38,6 +39,7 @@ export function Workspace({ id }: { id: string }) {
   const [settings, setSettings] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
   const [pipe, setPipe] = useState(false);
+  const [railOpen, setRailOpen] = useState(false); // mobile drawer for the project rail
   const [contrib, setContrib] = useState(false);
   const { toast, node } = useToast();
   const pRef = useRef(p);
@@ -185,57 +187,27 @@ export function Workspace({ id }: { id: string }) {
 
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">
-      {/* Left rail: project nav (Flow-like) */}
-      <aside className="sticky top-0 hidden h-dvh w-[232px] shrink-0 flex-col border-r border-white/[0.06] bg-ink-900/70 lg:flex">
-        <div className="flex h-14 items-center gap-2 border-b border-white/[0.06] px-4">
-          <Link href="/dashboard" className="btn-ghost h-8 w-8 px-0" aria-label="Back">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <span className="truncate text-sm font-semibold">{p.title}</span>
-        </div>
-        <nav className="flex flex-col gap-1 p-3">
-          {TABS.map((t, i) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-3 rounded-xl px-3 h-10 text-sm transition ${tab === t.id ? "bg-white/[0.08] text-white" : "text-ink-300 hover:bg-white/[0.04] hover:text-white"}`}
-            >
-              <span
-                className={`grid h-6 w-6 place-items-center rounded-md text-[11px] font-semibold ${tab === t.id ? "bg-brand-500 text-ink-950" : "bg-white/[0.06]"}`}
-              >
-                {i + 1}
-              </span>
-              <span className="flex-1 text-left">{t.label}</span>
-              {counts[t.id] !== "" && <span className="text-xs text-ink-400">{counts[t.id]}</span>}
-            </button>
-          ))}
-          <button
-            onClick={() => setPipe(true)}
-            className="mt-2 flex items-center gap-3 rounded-xl px-3 h-10 text-sm text-ink-300 transition hover:bg-white/[0.04] hover:text-white"
-          >
-            <Workflow className="h-4 w-4 text-sky-300" />
-            <span className="flex-1 text-left">Pipeline</span>
-            <span className="text-[10px] text-sky-300">Built with Meta</span>
-          </button>
-        </nav>
-        <div className="mt-auto space-y-3 border-t border-white/[0.06] p-4 text-xs text-ink-400">
-          <div className="flex flex-wrap gap-1.5">
-            <span className="badge bg-white/[0.06] text-ink-300">{p.mode}</span>
-            <span className="badge bg-white/[0.06] text-ink-300">{p.aspect}</span>
-            <span className="badge bg-white/[0.06] text-ink-300">{p.style}</span>
-            <span className="badge bg-white/[0.06] text-ink-300">{p.outputType} mode</span>
-          </div>
-          <button className="btn-outline w-full h-9" onClick={() => setSettings(true)}>
-            <Settings2 className="h-4 w-4" /> Project settings
-          </button>
-          <StatusPill />
-        </div>
-      </aside>
+      {/* Left rail: fixed, collapsible, resizable project nav */}
+      <ProjectRail
+        title={p.title}
+        tabs={TABS}
+        tab={tab}
+        setTab={(t) => setTab(t as TabId)}
+        counts={counts}
+        badges={[p.mode, p.aspect, p.style, `${p.outputType} mode`]}
+        onPipeline={() => setPipe(true)}
+        onSettings={() => setSettings(true)}
+        mobileOpen={railOpen}
+        setMobileOpen={setRailOpen}
+      />
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar for < lg */}
         <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-ink-950/90 backdrop-blur lg:hidden">
           <div className="flex h-14 items-center gap-2 pl-3 pr-14 sm:pl-5 sm:pr-16">
+            <button className="btn-ghost h-9 w-9 px-0" onClick={() => setRailOpen(true)} aria-label="Open menu">
+              <Menu className="h-4 w-4" />
+            </button>
             <Link href="/dashboard" className="btn-ghost h-9 w-9 px-0" aria-label="Back">
               <ArrowLeft className="h-4 w-4" />
             </Link>

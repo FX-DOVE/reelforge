@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Eye, EyeOff, KeyRound, Lock, LogOut, Save, ShieldCheck } from "lucide-react";
+import { BarChart3, Clapperboard, Cpu, Settings2, Users, Eye, EyeOff, KeyRound, Lock, LogOut, Save, ShieldCheck } from "lucide-react";
 import { Spinner, useToast } from "./ui";
 import { VideoProvidersAdmin } from "./VideoProvidersAdmin";
 
@@ -11,6 +11,11 @@ export function Admin() {
   const [data, setData] = useState<Data | null>(null);
   const [authed, setAuthed] = useState<boolean | null>(null);
   const { toast, node } = useToast();
+  const [view, setView] = useState("ai"); // active admin section (synced with the URL hash)
+  useEffect(() => {
+    const h = window.location.hash.slice(1);
+    if (h) setView(h);
+  }, []);
   const load = async () => {
     const r = await fetch("/api/admin/settings");
     if (r.status === 403) {
@@ -31,11 +36,38 @@ export function Admin() {
       </div>
     );
   if (!authed) return <Login onDone={load} />;
+  // Grouped navigation: each nav item shows a set of panels; every setting group lands in exactly one place.
+  const groups = data ? [...new Set(data.fields.map((f) => f.group))] : [];
+  const pick = (re: RegExp) => groups.filter((g) => re.test(g));
+  const ai = pick(/^(Meta|AI brain|Task routing|Baseten|Research)/);
+  const media = pick(/^(Video|Voiceover|Continuity|Storage)/);
+  const platform = groups.filter((g) => !ai.includes(g) && !media.includes(g));
+  const NAV: { id: string; label: string; icon: typeof Cpu; desc: string; groups: string[]; extra?: React.ReactNode }[] = [
+    { id: "ai", label: "AI models", icon: Cpu, desc: "Meta models, the AI brain chain, task routing and the research agent.", groups: ai },
+    {
+      id: "media",
+      label: "Media & storage",
+      icon: Clapperboard,
+      desc: "Video engines, voiceover, continuity and Cloudflare R2 storage.",
+      groups: media,
+      extra: <VideoProvidersAdmin toast={toast} />,
+    },
+    { id: "platform", label: "Platform", icon: Settings2, desc: "Email, pricing estimates and hackathon rules.", groups: platform },
+    { id: "users", label: "Users", icon: Users, desc: "Accounts, roles and access.", groups: [], extra: <UsersPanel toast={toast} /> },
+    { id: "usage", label: "Usage & cost", icon: BarChart3, desc: "Model calls, spend and escalations.", groups: [], extra: <UsagePanel /> },
+  ];
+  const cur = NAV.find((n) => n.id === view) || NAV[0];
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
-      <div className="flex flex-wrap items-center gap-3">
-        <ShieldCheck className="h-5 w-5 text-brand-400" />
-        <h1 className="text-2xl font-semibold tracking-tight">Admin · Providers & keys</h1>
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      {/* Page header */}
+      <header className="flex flex-wrap items-center gap-3 border-b border-white/[0.06] pb-5">
+        <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-500/15">
+          <ShieldCheck className="h-5 w-5 text-brand-400" />
+        </span>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
+          <p className="text-sm text-ink-400">Keys are encrypted at rest (AES-256-GCM) and never sent to the browser — you only see a masked hint.</p>
+        </div>
         <button
           className="btn-ghost ml-auto"
           onClick={async () => {
@@ -46,39 +78,60 @@ export function Admin() {
           <LogOut className="h-4 w-4" />
           Sign out
         </button>
-      </div>
-      <p className="mt-1 text-sm text-ink-400">
-        Keys are encrypted at rest (AES-256-GCM) on the server and never sent to the browser — you only see a masked hint.
-      </p>
+        {data && (
+          <div className="flex w-full flex-wrap gap-2">
+            {[
+              ["Meta models", data.status.meta],
+              ["Video engine", data.status.video],
+              ["YouTube API", data.status.youtube],
+            ].map(([l, v]) => (
+              <span key={String(l)} className={`badge ${v ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+                {String(l)}: {v ? "live" : "demo"}
+              </span>
+            ))}
+            <span className="badge bg-sky-500/15 text-sky-300">TTS: {String(data.status.tts)}</span>
+          </div>
+        )}
+      </header>
       {data && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {[
-            ["Meta models", data.status.meta],
-            ["Video engine", data.status.video],
-            ["YouTube API", data.status.youtube],
-          ].map(([l, v]) => (
-            <span key={String(l)} className={`badge ${v ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
-              {String(l)}: {v ? "live" : "demo"}
-            </span>
-          ))}
-          <span className="badge bg-sky-500/15 text-sky-300">TTS: {String(data.status.tts)}</span>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+          {/* Section nav: horizontal chips on mobile, sticky list on desktop */}
+          <nav className="flex gap-1 overflow-x-auto lg:sticky lg:top-6 lg:flex-col lg:self-start [&::-webkit-scrollbar]:hidden" aria-label="Admin sections">
+            {NAV.map((n) => (
+              <button
+                key={n.id}
+                onClick={() => {
+                  setView(n.id);
+                  history.replaceState(null, "", "#" + n.id);
+                }}
+                className={`flex shrink-0 items-center gap-2.5 rounded-xl px-3 h-10 text-sm transition ${cur.id === n.id ? "bg-white/[0.08] text-white" : "text-ink-300 hover:bg-white/[0.04] hover:text-white"}`}
+              >
+                <n.icon className={`h-4 w-4 ${cur.id === n.id ? "text-brand-400" : ""}`} />
+                <span className="flex-1 text-left">{n.label}</span>
+                {n.groups.length > 0 && <span className="hidden text-xs text-ink-500 lg:inline">{n.groups.length}</span>}
+              </button>
+            ))}
+          </nav>
+          <main className="min-w-0 [&>section:first-of-type]:mt-0 [&_section]:mt-5">
+            <div className="mb-5">
+              <h2 className="text-lg font-semibold">{cur.label}</h2>
+              <p className="text-sm text-ink-400">{cur.desc}</p>
+            </div>
+            {cur.groups.map((g) => (
+              <Group
+                key={g}
+                title={g}
+                fields={data.fields.filter((f) => f.group === g)}
+                onSaved={(d) => {
+                  setData(d);
+                  toast("Saved securely");
+                }}
+              />
+            ))}
+            {cur.extra}
+          </main>
         </div>
       )}
-      {data &&
-        [...new Set(data.fields.map((f) => f.group))].map((g) => (
-          <Group
-            key={g}
-            title={g}
-            fields={data.fields.filter((f) => f.group === g)}
-            onSaved={(d) => {
-              setData(d);
-              toast("Saved securely");
-            }}
-          />
-        ))}
-      {data && <VideoProvidersAdmin toast={toast} />}
-      {data && <UsersPanel toast={toast} />}
-      {data && <UsagePanel />}
       {node}
     </div>
   );
