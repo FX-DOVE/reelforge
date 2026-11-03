@@ -46,7 +46,6 @@ export function useFloatBox(enabled: boolean) {
   // Shared pointer-drag helper: `apply` maps the pointer delta onto the starting box.
   const track = useCallback((e: React.PointerEvent, apply: (s: Box, dx: number, dy: number) => Box, cursor: string) => {
     if (!live.current || e.button > 0) return;
-    e.preventDefault();
     const s = live.current,
       x0 = e.clientX,
       y0 = e.clientY;
@@ -67,7 +66,19 @@ export function useFloatBox(enabled: boolean) {
 
   /** Header drag: ignore presses that start on buttons/inputs/links so they stay clickable. */
   const onDragStart = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest("button,a,input,textarea,select,[role=button]")) return;
+    const t = e.target as HTMLElement;
+    // Buttons stay clickable; the big agent-name button (data-drag-ok) can also drag, and its click is swallowed if it moved.
+    if (t.closest("button,a,input,textarea,select,[role=button]") && !t.closest("[data-drag-ok]")) return;
+    const x0 = e.clientX,
+      y0 = e.clientY;
+    const swallow = (ev: MouseEvent) => {
+      if (Math.hypot(ev.clientX - x0, ev.clientY - y0) > 4) {
+        ev.stopPropagation();
+        ev.preventDefault();
+      }
+      removeEventListener("click", swallow, true);
+    };
+    addEventListener("click", swallow, true);
     track(e, (s, dx, dy) => ({ ...s, x: s.x + dx, y: s.y + dy }), "grabbing");
   };
 
