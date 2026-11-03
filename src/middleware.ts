@@ -3,7 +3,7 @@ import { COOKIE, verifyToken } from "@/lib/session";
 
 /** API routes anyone may call: sign-in/up, health, the admin login form and the token-guarded boot hook. Everything else needs a session
  *  (route handlers then check project ownership). */
-const PUBLIC_API = [/^\/api\/auth\//, /^\/api\/status$/, /^\/api\/admin\/(login|logout)$/, /^\/api\/recover$/];
+const PUBLIC_API = [/^\/api\/auth\//, /^\/api\/status$/, /^\/api\/admin\/(login|logout)$/, /^\/api\/recover$/, /^\/api\/landing\//];
 /** The public marketing site. Every other page (dashboard, studio, settings, docs…) needs a session. /admin has its own login. */
 const PUBLIC_PAGES = new Set(["/", "/pricing", "/about", "/faq", "/login", "/signup", "/forgot", "/reset", "/terms", "/privacy"]);
 const AUTH_PAGES = new Set(["/login", "/signup", "/forgot"]);

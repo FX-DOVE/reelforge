@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { PublicNav, PublicFooter, CtaBand } from "@/components/PublicSite";
+import { Showcase } from "@/components/landing/Showcase";
 import { FilmCarousel, FilmStrip, FloatCard, Hero, Reveal, StepSequence } from "@/components/landing/Motion";
 
 // Landing films are served from Cloudflare R2 (LANDING_CDN_BASE, e.g. https://media.example.com/landing) with /brand as fallback.
@@ -56,6 +57,8 @@ export default function Landing() {
       <Hero video={vid("hero-loop.mp4")} poster={img("hero-poster.jpg")} />
 
       <section className="py-6"><FilmStrip stills={STILLS} /></section>
+
+      <Showcase />
 
       <section id="film" className="mx-auto max-w-6xl scroll-mt-20 px-5 pt-20 sm:px-8 sm:pt-28">
         <Reveal><h2 className="text-center text-4xl font-semibold tracking-[-0.03em] sm:text-6xl">Made here. Start to finish.</h2></Reveal>
