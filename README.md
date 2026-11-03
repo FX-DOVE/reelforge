@@ -4,7 +4,7 @@
 
 Built for the Meta Global AI Developer Hackathon 2026.
 
-![Landing](https://raw.githubusercontent.com/FX-DOVE/opie-ai-movie-studio/main/public/brand/still-lagos.webp)
+![Landing](https://raw.githubusercontent.com/FX-DOVE/reelforge/main/public/brand/still-lagos.webp)
 
 ## Features
 
