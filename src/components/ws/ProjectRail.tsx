@@ -85,7 +85,7 @@ export function ProjectRail({
           </button>
         )}
       </div>
-      <nav className={`flex flex-col gap-1 overflow-y-auto ${mini ? "items-center p-2" : "p-3"}`}>
+      <nav className={`flex flex-col gap-1 ${mini ? "items-center p-2" : "overflow-y-auto p-3"}`}>
         {tabs.map((t, i) => {
           const on = tab === t.id;
           const Icon = t.icon;
