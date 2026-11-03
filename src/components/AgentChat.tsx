@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { AgentSwitcher } from "./AgentSwitcher";
 import { ArrowUp, Check, ChevronDown, ChevronLeft, Monitor, Plus, Loader2, Paperclip, RotateCw, Square, Volume2, VolumeX, Wrench, X } from "lucide-react";
 import { Bot, Mascot } from "./Mascot";
+import { EDGES, useFloatBox } from "./useFloatBox";
 import { botFor, randomBot, type BotStyle } from "@/lib/botStyle";
 import { MicButton } from "./MicButton";
 import { autoResearchPref } from "@/lib/autopref";
@@ -193,6 +194,7 @@ export function FloatingAgent() {
       others.forEach((el) => el.removeAttribute("inert")); Object.assign(b, prev); scrollTo(0, y); setVv(null);
     };
   }, [open]);
+  const fb = useFloatBox(open && !mob); // draggable/resizable on desktop only
   if (path.startsWith("/admin")) return null;
   const projectId = path.match(/^\/studio\/([^/]+)/)?.[1];
   const choose = (a: AgentLite | null) => { setCur(a); void fetch("/api/desk/workspace", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ws: a?.id || "main" }) }).catch(() => {}); setPick(false); if (a) localStorage.setItem("rf-agent", a.id); else localStorage.removeItem("rf-agent"); };
@@ -201,9 +203,11 @@ export function FloatingAgent() {
   return (
     <>
       {open && mob && <div aria-hidden className="fixed inset-x-0 -top-[50vh] z-[69] h-[200vh] bg-ink-950 md:hidden" />}
-      {open && <div ref={sheet} role="dialog" aria-modal="true" aria-label="Chat with Reel" style={mob && vv ? { top: vv.top, height: vv.h, bottom: "auto" } : undefined}
+      {open && <div ref={sheet} role="dialog" aria-modal="true" aria-label="Chat with Reel" style={mob && vv ? { top: vv.top, height: vv.h, bottom: "auto" } : fb.box ? { left: fb.box.x, top: fb.box.y, width: fb.box.w, height: fb.box.h, right: "auto", bottom: "auto" } : undefined}
         className="fixed inset-x-0 top-0 z-[70] flex h-[100dvh] flex-col overflow-hidden overscroll-none bg-ink-950 md:inset-auto md:bottom-6 md:right-6 md:h-[min(760px,calc(100dvh-48px))] md:w-[520px] md:overflow-hidden md:rounded-3xl md:border md:border-white/10 md:shadow-[0_40px_120px_-20px_rgba(0,0,0,.8)]">
-        <header className="pt-safe shrink-0 border-b border-white/[0.06] bg-ink-950/95 backdrop-blur">
+        {/* Desktop: drag by the header (not its buttons), double-click it to reset; resize from any edge/corner */}
+        {fb.box && EDGES.map((r) => <div key={r.edge} aria-hidden onPointerDown={fb.onResizeStart(r.edge)} className={`absolute z-[5] touch-none ${r.cls}`} />)}
+        <header onPointerDown={fb.box ? fb.onDragStart : undefined} onDoubleClick={(e) => { if (fb.box && !(e.target as HTMLElement).closest("button")) fb.reset(); }} title={fb.box ? "Drag to move · double-click to reset" : undefined} className={`pt-safe shrink-0 border-b border-white/[0.06] bg-ink-950/95 backdrop-blur ${fb.box ? "cursor-grab touch-none select-none" : ""}`}>
           <div className="flex h-14 items-center gap-3 px-2 md:px-4">
             <button aria-label="Close chat" className="grid h-10 w-10 place-items-center rounded-full text-ink-300 hover:bg-white/5 md:hidden" onClick={() => setOpen(false)}><ChevronLeft className="h-6 w-6" /></button>
             <button data-t="agent-switch" aria-label="Switch agent" aria-haspopup="dialog" aria-expanded={pick} onClick={() => setPick((x) => !x)} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-1 pr-2 text-left active:opacity-70">

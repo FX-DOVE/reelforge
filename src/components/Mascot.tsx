@@ -420,7 +420,7 @@ export function Mascot({ size = 64, still, floating, onTap, bot }: { size?: numb
     );
   const style: React.CSSProperties = pos
     ? { left: pos.x * 100 + "%", top: pos.y * 100 + "%" }
-    : { right: 16, bottom: "calc(env(safe-area-inset-bottom) + 84px)" };
+    : { right: 16, bottom: "calc(env(safe-area-inset-bottom) + var(--prompt-h, 0px) + 96px)" }; // default sits above chat send buttons and the prompt bar
   const leftSide = pos ? pos.x < 0.5 : false;
   return (
     <button
