@@ -21,7 +21,8 @@ import {
   type LocationSpec,
   type PropSpec,
 } from "./refsheet";
-import { parseScenes, NARRATOR_RE } from "./screenplay";
+import { parseScenes, NARRATOR_RE, stripScriptBoilerplate } from "./screenplay";
+import { coerceAspect, fitDurations } from "./platform";
 import { DEFAULT_GENRE, GENRES, GENRE_IDS, detectGenre, genreBrief, genreOf, isGenre, type GenrePurpose, type GenreSkill } from "./genres";
 import { normalizeDialogue } from "./dialogue";
 import { FORMATS, MODES, STYLES, isApproved, isDraft, type Asset, type ChatMsg, type ImageVersion, type Project, type Scene, type Shot } from "./types";
@@ -39,7 +40,8 @@ export function genreFor(p: Project): GenreSkill | undefined {
 /** Shared context for every agent: mode, format, look, the genre skill slice for this agent, then the user's learned taste on top. */
 function ctx(p: Project, purpose: "director" | "script" = "director", skill?: GenrePurpose) {
   const g = skill && genreFor(p);
-  return `Mode: ${MODES[p.mode]}. Format: ${FORMATS[p.format].label} (${p.aspect}, platform max ${FORMATS[p.format].maxSec}s). ${lengthBrief(p.targetSec || autoLength(p))} Visual style: ${styleText(p)}.${g ? `\n\n${genreBrief(g, skill!)}\n\n` : ""}${memoryBrief(p.ownerId, purpose)}${g ? "\n(The user's learned preferences above override the genre defaults where they conflict.)" : ""}`;
+  const aspect = coerceAspect(p.format, p.aspect);
+  return `Mode: ${MODES[p.mode]}. Format: ${FORMATS[p.format].label} (${aspect}, platform max ${FORMATS[p.format].maxSec}s). ${lengthBrief(Math.min(p.targetSec || autoLength(p), FORMATS[p.format].maxSec))} Visual style: ${styleText(p)}.${g ? `\n\n${genreBrief(g, skill!)}\n\n` : ""}${memoryBrief(p.ownerId, purpose)}${g ? "\n(The user's learned preferences above override the genre defaults where they conflict.)" : ""}`;
 }
 
 /** Muse Spark picks the film style from the idea + brainstorm (+ the user's learned taste) unless the user chose one. */
@@ -218,7 +220,7 @@ export async function writeScript(p: Project, instruction: string) {
   const sv = data as unknown as Record<string, unknown>;
   const script = [sv.script, sv.screenplay, sv.text, sv.content].find((v) => typeof v === "string" && v.trim().length > 40) as string | undefined;
   if (!script) throw new Error("The AI returned no script text — try again");
-  data.script = (await fitLength(p, script)).script;
+  data.script = stripScriptBoilerplate((await fitLength(p, script)).script);
   const finalScript = data.script;
   await db.update(p.id, (x) => {
     x.script = finalScript;
@@ -466,7 +468,7 @@ export async function assetImage(p: Project, assetId: string, extra = "") {
   }
   const file = path.join(projectMediaDir(p.id), `asset-${a.id}-${Date.now()}.png`);
   // Muse Image 1.0: paint this character/location/prop reference sheet (in: locked spec prompt; out: PNG sheet).
-  const source = await generateImage({ prompt, aspect: p.aspect, outFile: file, refs, label: `${a.kind}: ${a.name}`, style: p.style });
+  const source = await generateImage({ prompt, aspect: coerceAspect(p.format, p.aspect), outFile: file, refs, label: `${a.kind}: ${a.name}`, style: p.style });
   const v = newVersion(mediaUrl(file), prompt, source);
   await db.update(p.id, (x) => {
     const t = x.assets.find((y) => y.id === assetId)!;
@@ -681,9 +683,25 @@ export async function buildStoryboard(p: Project) {
       }),
     ),
   }));
+  const max = FORMATS[p.format].maxSec;
+  const flat = scenes.flatMap((s) => s.shots);
+  const fitted = fitDurations(
+    flat.map((s) => s.durationSec || 4),
+    max,
+  );
+  if (fitted.length < flat.length) {
+    const drop = new Set(flat.slice(fitted.length).map((s) => s.id));
+    for (const s of scenes) s.shots = s.shots.filter((sh) => !drop.has(sh.id));
+  }
+  scenes.flatMap((s) => s.shots).forEach((s, i) => {
+    if (fitted[i] != null) s.durationSec = fitted[i];
+  });
+  let order = 0;
+  for (const s of scenes) for (const sh of s.shots) sh.index = order++;
   const g = genreFor(p);
   await db.update(p.id, (x) => {
-    x.scenes = scenes;
+    x.aspect = coerceAspect(x.format, x.aspect);
+    x.scenes = scenes.filter((s) => s.shots.length);
     x.bible = buildBible(x);
     x.genreSkill = g ? `${g.id}@${g.version}` : undefined;
   });
@@ -713,7 +731,7 @@ function shotPrompt(p: Project, sh: Shot, which: "start" | "end", change?: strin
     assets.some((a) => a.kind === "prop")
       ? "Props must keep their exact colours, materials, markings and label spelling; no duplicate props, no warped text."
       : "",
-    `${styleText(p)}, ${p.aspect} composition.`,
+    `${styleText(p)}, ${coerceAspect(p.format, p.aspect)} composition.`,
     g ? genreBrief(g, "image") : "",
     "No on-screen text, captions, logos or watermarks.",
     change ? `Change: ${change}. Keep everything else identical.` : "",
@@ -743,7 +761,7 @@ export async function generateFrame(p: Project, shotId: string, which: "start" |
   const prompt = shotPrompt(p, sh, which, change);
   const file = path.join(projectMediaDir(p.id), `shot-${sh.id}-${which}-${Date.now()}.png`);
   // Muse Image 1.0: storyboard start/end frame, conditioned on the cast/location/prop reference sheets.
-  const source = await generateImage({ prompt, aspect: p.aspect, outFile: file, refs, label: `Shot ${sh.index + 1} · ${which} frame`, style: p.style });
+  const source = await generateImage({ prompt, aspect: coerceAspect(p.format, p.aspect), outFile: file, refs, label: `Shot ${sh.index + 1} · ${which} frame`, style: p.style });
   const v = newVersion(mediaUrl(file), change ? `EDIT: ${change}` : prompt, source);
   await db.update(p.id, (x) => {
     const t = findShot(x, shotId);

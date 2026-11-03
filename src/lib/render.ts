@@ -23,7 +23,8 @@ import { genreBrief } from "./genres";
 import { MAX_WPS, clarity, slowDown, speakable, sttOn, transcribe } from "./dialogue";
 import { record, withStep } from "./usage";
 import { getConfig } from "./config";
-import { aspectSize, type Project, type Shot } from "./types";
+import { FORMATS, aspectSize, type Project, type Shot } from "./types";
+import { coerceAspect } from "./platform";
 import { animateShot, composeScenes, hfAvailable } from "./motion";
 
 const now = () => new Date().toISOString();
@@ -95,7 +96,7 @@ export async function clarityShot(pid: string, shotId: string) {
         const v = clarity(text, heard);
         werV = v.wer;
         cerV = v.cer;
-        source = "Meta wav2vec2 speech-to-text";
+        source = "Meta wav2vec2 (facebook/wav2vec2-base-960h)";
         if (!v.pass) issues.push(`unclear (WER ${(v.wer * 100).toFixed(0)}%, CER ${(v.cer * 100).toFixed(0)}%: heard "${heard.slice(0, 80)}")`);
       } catch (e) {
         source = `pace only (STT: ${(e as Error).message.slice(0, 60)})`;
@@ -423,7 +424,16 @@ export async function renderProject(projectId: string) {
         warnings.push(`Shot ${sh.index + 1}: line may be hard to understand (${sh.clarity.issues.join("; ")}) — consider rewording it.`);
     if (warnings.length) await setRender(p.id, { warnings });
     p = db.getProject(p.id)!;
-    const { w, h } = aspectSize(p.aspect, 1280);
+    const aspect = coerceAspect(p.format, p.aspect);
+    if (aspect !== p.aspect) {
+      await db.update(p.id, (x) => {
+        x.aspect = aspect;
+      });
+      p = db.getProject(p.id)!;
+    }
+    const { w, h } = aspectSize(aspect, 1280);
+    const maxSec = FORMATS[p.format].maxSec;
+    let remain = maxSec;
     const fps = 25;
     const segs: string[] = [];
     const subs: string[] = [];
@@ -446,7 +456,13 @@ export async function renderProject(projectId: string) {
       const adur = audio ? await probeDuration(audio) : 0;
       const trimS = sh.trimStart || 0;
       // fit each shot to its voice line (unless the user locked a length), so narration covers the cut instead of dead air
-      const dur = segDur(sh, adur);
+      const dur = Math.min(segDur(sh, adur), remain);
+      if (dur < 0.45) {
+        warnings.push(`Shot ${i + 1} and later shots were left out so the cut stays within the ${FORMATS[p.format].label} limit of ${maxSec}s.`);
+        break;
+      }
+      remain -= dur;
+      if (!sh.durationLocked) sh.durationSec = dur;
       const out = path.join(work, `seg${String(i).padStart(3, "0")}.mp4`);
       const vIn: string[] = [];
       let vf: string;

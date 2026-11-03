@@ -5,21 +5,15 @@ import { Clapperboard, Shield, Globe, Settings, LogOut } from "lucide-react";
 import { Avatar, logout } from "./ProfilePage";
 import { Logo } from "./ui";
 import { useEffect, useState } from "react";
+import { useSession } from "./Session";
 
 const BASE_NAV = [
   { href: "/dashboard", label: "Projects", icon: Clapperboard },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 const ADMIN_NAV = { href: "/admin", label: "Admin", icon: Shield };
-type Me = { email: string; name?: string; avatar?: string | null; role: string };
 function useNav() {
-  const [me, setMe] = useState<Me | null>(null);
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((j) => setMe(j.user))
-      .catch(() => {});
-  }, []);
+  const me = useSession();
   return { me, nav: me?.role === "admin" ? [...BASE_NAV, ADMIN_NAV] : BASE_NAV };
 }
 

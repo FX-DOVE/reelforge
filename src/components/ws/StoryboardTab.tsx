@@ -6,6 +6,7 @@ import { Drawer, SourceBadge, Spinner } from "../ui";
 import { PromptBar } from "./PromptBar";
 import { ClipJobBadge } from "./VideoTab";
 import { active, ratio, shotsOf, type TabProps } from "./common";
+import { mediaSrc } from "@/lib/mediaSrc";
 
 const CS: Record<string, { t: string; c: string }> = {
   checking: { t: "Checking", c: "bg-sky-500/90" },
@@ -151,7 +152,7 @@ function ShotCard({ sh, aspect, busy, onOpen }: { sh: Shot; aspect: string; busy
     <button onClick={onOpen} className="group overflow-hidden rounded-2xl border border-white/[0.07] bg-ink-850 text-left transition hover:border-white/25">
       <div className="relative bg-ink-800" style={{ aspectRatio: ratio(aspect) }}>
         {img ? (
-          <img src={img.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={mediaSrc(img.url)} alt="" className="absolute inset-0 h-full w-full object-cover" />
         ) : (
           <div className="absolute inset-0 grid place-items-center text-ink-600">
             <ImagePlus className="h-7 w-7" />
@@ -165,7 +166,7 @@ function ShotCard({ sh, aspect, busy, onOpen }: { sh: Shot; aspect: string; busy
         <span className="absolute left-2 top-2 badge bg-black/60 text-white">{sh.index + 1}</span>
         {end && (
           <img
-            src={end.url}
+            src={mediaSrc(end.url)}
             alt=""
             className="absolute bottom-2 right-2 h-[28%] rounded-md border border-white/40 object-cover shadow-lg"
             style={{ aspectRatio: ratio(aspect) }}
@@ -251,7 +252,7 @@ function ShotEditor({
         style={{ aspectRatio: ratio(p.aspect), maxHeight: "52dvh" }}
       >
         {img ? (
-          <img src={img.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={mediaSrc(img.url)} alt="" className="absolute inset-0 h-full w-full object-cover" />
         ) : (
           <div className="absolute inset-0 grid place-items-center px-6 text-center text-sm text-ink-400">No {which} frame yet</div>
         )}
@@ -288,7 +289,7 @@ function ShotEditor({
                 className={`relative h-16 shrink-0 overflow-hidden rounded-lg border-2 ${v.id === img?.id ? "border-brand-400" : "border-transparent opacity-70 hover:opacity-100"}`}
                 style={{ aspectRatio: ratio(p.aspect) }}
               >
-                <img src={v.url} alt="" className="h-full w-full object-cover" />
+                <img src={mediaSrc(v.url)} alt="" className="h-full w-full object-cover" />
               </button>
             ))}
           </div>
@@ -406,7 +407,7 @@ function ShotEditor({
               {busy.has("voiceShot") ? <Spinner /> : <Mic className="h-4 w-4" />}
               {sh.audioUrl ? "Re-voice" : "Generate voice"}
             </button>
-            {sh.audioUrl && <audio controls src={sh.audioUrl} className="h-9 min-w-0 flex-1" />}
+            {sh.audioUrl && <audio controls src={mediaSrc(sh.audioUrl)} className="h-9 min-w-0 flex-1" />}
           </div>
         )}
         <div>
@@ -420,7 +421,7 @@ function ShotEditor({
                   onClick={() => save({ assetIds: on ? sh.assetIds.filter((x) => x !== a.id) : [...sh.assetIds, a.id] })}
                   className={`chip ${on ? "chip-on" : ""}`}
                 >
-                  {active(a.images, a.activeImage) && <img src={active(a.images, a.activeImage)!.url} alt="" className="h-5 w-5 rounded-full object-cover" />}
+                  {active(a.images, a.activeImage) && <img src={mediaSrc(active(a.images, a.activeImage)!.url)} alt="" className="h-5 w-5 rounded-full object-cover" />}
                   {a.name}
                 </button>
               );

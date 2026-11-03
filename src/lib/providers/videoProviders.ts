@@ -142,11 +142,12 @@ const DEMO: VideoProviderCfg = {
   costPerSec: 0,
 };
 
-/** Hackathon gating: Meta-only blocks third-party video, except the admin "Video motion (beta)" switch for the self-hosted Runpod provider. */
+/** Hackathon gating: while Meta-models-only is on, no third-party video provider can run, including Runpod/LTX. The beta switch only applies when that rule is off. */
 export function allowed(p: { type: VideoType; id: string; enabled?: boolean }) {
   if (p.type === "mock") return true;
+  if (metaOnly()) return false;
   if (p.type === "runpod") return motionBeta() && !!providerKey(p.id);
-  return !metaOnly() && (p.type === "ltx-comfy" || !!providerKey(p.id));
+  return p.type === "ltx-comfy" || !!providerKey(p.id);
 }
 /** What regular users see: never a model or vendor name for the beta motion provider. */
 export const shownName = (p: { type: string; name: string }) => (p.type === "runpod" ? "Video motion" : p.name);
@@ -203,14 +204,7 @@ export const adminView = () =>
   listProviders().map((p) => ({
     ...p,
     key: providerKey(p.id) ? mask(providerKey(p.id)!) : "",
-    blocked:
-      p.type === "runpod"
-        ? motionBeta()
-          ? undefined
-          : "Off — turn on Settings → Hackathon rules → Video motion (beta)"
-        : metaOnly() && p.type !== "mock"
-          ? META_ONLY_NOTE
-          : undefined,
+    blocked: !allowed(p) && p.type !== "mock" ? (metaOnly() ? META_ONLY_NOTE : p.type === "runpod" ? "Off — turn on Settings → Hackathon rules → Video motion (beta) (and turn Meta models only off)" : undefined) : undefined,
   }));
 export const publicView = () =>
   listProviders()
@@ -577,7 +571,7 @@ async function runpodMotion(c: VideoProviderCfg, key: string, r: VideoRequest, o
 }
 
 export async function runProvider(c: VideoProviderCfg, r: VideoRequest, on: Progress = () => {}) {
-  if (!allowed(c)) throw new Error(c.type === "runpod" ? "Video motion (beta) is off" : `${c.name}: ${META_ONLY_NOTE}`);
+  if (!allowed(c)) throw new Error(metaOnly() ? META_ONLY_NOTE : c.type === "runpod" ? "Video motion (beta) is off" : `${c.name}: ${META_ONLY_NOTE}`);
   const req = { ...r, durationSec: Math.max(1, Math.min(r.durationSec, c.maxDuration)), endFrame: c.firstLast ? r.endFrame : undefined };
   const key = providerKey(c.id);
   if (c.type !== "mock" && c.type !== "ltx-comfy" && !key) throw new Error(`${shownName(c)}: no API key saved`);

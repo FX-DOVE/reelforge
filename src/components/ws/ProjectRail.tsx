@@ -21,6 +21,7 @@ export function ProjectRail({
   counts,
   badges,
   onPipeline,
+  pipelineOn = false,
   onSettings,
   mobileOpen,
   setMobileOpen,
@@ -32,6 +33,7 @@ export function ProjectRail({
   counts: Record<string, string | number>;
   badges: string[];
   onPipeline: () => void;
+  pipelineOn?: boolean;
   onSettings: () => void;
   mobileOpen: boolean;
   setMobileOpen: (v: boolean) => void;
@@ -121,7 +123,7 @@ export function ProjectRail({
             setMobileOpen(false);
           }}
           aria-label="Pipeline"
-          className={`group relative mt-2 flex h-10 items-center gap-3 rounded-xl text-sm text-ink-300 transition hover:bg-white/[0.04] hover:text-white ${mini ? "w-11 justify-center" : "px-3"}`}
+          className={`group relative mt-2 flex h-10 items-center gap-3 rounded-xl text-sm transition ${pipelineOn ? "bg-white/[0.08] text-white" : "text-ink-300 hover:bg-white/[0.04] hover:text-white"} ${mini ? "w-11 justify-center" : "px-3"}`}
         >
           <Workflow className="h-4 w-4 shrink-0 text-sky-300" />
           {!mini && <span className="flex-1 text-left">Pipeline</span>}

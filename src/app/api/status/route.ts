@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { liveStatus } from "@/lib/config";
-import { EDGE_VOICES } from "@/lib/providers/tts";
+import { VOICES } from "@/lib/voiceCatalog";
 export const dynamic = "force-dynamic";
-/** Public: only booleans about which engines are live — never key material. */
+/** Public: which engines are live — never key material, never a third-party voice name while Meta-only is on. */
 export async function GET() {
-  return NextResponse.json({ ...liveStatus(), voices: EDGE_VOICES });
+  const live = liveStatus();
+  return NextResponse.json(
+    { ...live, voices: VOICES.map(({ id, label }) => ({ id, label })) },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }

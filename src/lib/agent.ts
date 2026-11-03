@@ -7,6 +7,7 @@ import { getSession, startResearch, type Task } from "./research";
 import type { Idea, Project } from "./types";
 import { keywordReport, rewriteAsScript, scriptReport, stamp } from "./youtube";
 import { FORMATS } from "./types";
+import { enterUser } from "./usage";
 
 /** ReelForge assistant: a conversational agent with tool calling over the studio's own actions. */
 type Turn = { role: "user" | "assistant" | "tool"; content: string; at: string; tool?: string; ok?: boolean };
@@ -669,6 +670,7 @@ export function agentStream(o: {
   conv.turns.push({ role: "user", content: o.message, at: now() });
   const stream = new ReadableStream<Uint8Array>({
     async start(ctrl) {
+      if (conv.ownerId) enterUser(conv.ownerId);
       const emit = (x: unknown) => {
         try {
           ctrl.enqueue(enc.encode(JSON.stringify(x) + "\n"));
@@ -698,7 +700,7 @@ export function agentStream(o: {
       try {
         if (!llmLive()) {
           const t =
-            "I'm in demo mode — add a Meta key (or an OpenAI-compatible fallback like xAI) in Admin → AI brain and I'll be able to plan and run studio tasks for you.";
+            "I'm in demo mode — add a Meta key in Admin → Meta Model API and I'll be able to plan and run studio tasks for you.";
           emit({ type: "delta", text: t });
           conv.turns.push({ role: "assistant", content: t, at: now() });
           return;

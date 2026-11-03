@@ -1,10 +1,11 @@
 import type { Asset, Project } from "./types";
 import { getConfig } from "./config";
+import { canonicalVoice } from "./voiceCatalog";
 
 /** Voices for characters, picked from the gender and age the character bible describes (unless the user chose one by hand). */
 export type Gender = "female" | "male" | "unknown";
-const FEMALE_ALT = ["en-GB-SoniaNeural", "en-US-JennyNeural", "en-ZA-LeahNeural", "en-US-AriaNeural"];
-const MALE_ALT = ["en-GB-RyanNeural", "en-US-GuyNeural", "en-KE-ChilembaNeural", "en-US-AndrewNeural"];
+const FEMALE_ALT = ["mms-calm", "mms-friendly", "mms-za-f", "mms-bright"];
+const MALE_ALT = ["mms-doc", "mms-ad", "mms-ke-m", "mms-narrator"];
 
 const F =
   /\b(woman|women|female|girl|girls|she|her|hers|herself|mother|mum|mom|mama|wife|sister|daughter|aunt|auntie|aunty|queen|lady|ladies|madam|madame|grandmother|grandma|granny|mrs|ms|miss|actress|bride|princess|matriarch|lioness|niece|heroine|businesswoman|policewoman|girlfriend|nun|waitress|hostess)\b/g;
@@ -45,14 +46,15 @@ export function inferAge(a: Pick<Asset, "name" | "description" | "details" | "sp
   return "adult";
 }
 const list = (g: Gender) => {
-  const f = getConfig("VOICE_FEMALE") || "en-NG-EzinneNeural",
-    m = getConfig("VOICE_MALE") || "en-NG-AbeoNeural";
+  const f = canonicalVoice(getConfig("VOICE_FEMALE") || "mms-ng-f"),
+    m = canonicalVoice(getConfig("VOICE_MALE") || "mms-ng-m");
   return g === "female" ? [f, ...FEMALE_ALT.filter((v) => v !== f)] : [m, ...MALE_ALT.filter((v) => v !== m)];
 };
 /** Default voice for one character given voices already taken by the rest of the cast. */
 export function pickVoice(a: Asset, taken: string[] = []): string {
+  taken = taken.map((v) => canonicalVoice(v));
   const age = inferAge(a);
-  if (age === "child") return getConfig("VOICE_CHILD") || "en-US-AnaNeural";
+  if (age === "child") return canonicalVoice(getConfig("VOICE_CHILD") || "mms-child");
   let g = inferGender(a);
   if (g === "unknown")
     g = /\b(ada|ngozi|chioma|amaka|funke|aisha|zainab|fatima|bisi|yetunde|folake|kemi|nneka|ifeoma|uche?nna|mary|sarah|grace|joy|blessing)\b/i.test(a.name)
@@ -68,7 +70,7 @@ export function pickVoice(a: Asset, taken: string[] = []): string {
 export function assignVoices(p: Project): string[] {
   const changed: string[] = [];
   const chars = p.assets.filter((a) => a.kind === "character");
-  const taken: string[] = chars.filter((a) => a.voiceManual && a.voice).map((a) => a.voice!);
+  const taken: string[] = chars.filter((a) => a.voiceManual && a.voice).map((a) => canonicalVoice(a.voice));
   for (const a of chars) {
     if (a.voiceManual && a.voice) continue;
     const v = pickVoice(a, taken);
@@ -92,12 +94,10 @@ export function clearLinesFor(p: Project, names: string[]) {
 }
 export const voiceFor = (p: Project, speaker?: string) => {
   const a = p.assets.find((x) => x.kind === "character" && x.name.toLowerCase() === (speaker || "").toLowerCase());
-  if (!a) return getConfig("VOICE_FEMALE") || "en-NG-EzinneNeural";
-  return (
-    a.voice ||
-    pickVoice(
-      a,
-      p.assets.filter((x) => x.kind === "character" && x !== a && x.voice).map((x) => x.voice!),
-    )
+  if (!a) return canonicalVoice(getConfig("VOICE_FEMALE") || "mms-ng-f");
+  if (a.voice) return canonicalVoice(a.voice);
+  return pickVoice(
+    a,
+    p.assets.filter((x) => x.kind === "character" && x !== a && x.voice).map((x) => x.voice!),
   );
 };

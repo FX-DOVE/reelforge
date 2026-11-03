@@ -2,9 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
-import { getConfig } from "../config";
+import { getConfig, metaOnly } from "../config";
 import { record } from "../usage";
 import { ffmpeg, probeDuration } from "../ffmpeg";
+import { shapeIsFemale, voiceShape, VOICES } from "../voiceCatalog";
 
 /**
  * Pluggable text-to-speech. Default: Meta MMS-TTS (self-hosted). Edge/ ElevenLabs / xAI / OpenAI-compatible slots are configured in Admin.
@@ -18,19 +19,8 @@ export interface TTSProvider {
   synth(text: string, voice: string, outFile: string): Promise<void>;
 }
 
-export const EDGE_VOICES = [
-  { id: "en-US-AndrewNeural", label: "Andrew · US · warm narrator" },
-  { id: "en-US-AriaNeural", label: "Aria · US · bright" },
-  { id: "en-GB-RyanNeural", label: "Ryan · UK · documentary" },
-  { id: "en-GB-SoniaNeural", label: "Sonia · UK · calm" },
-  { id: "en-NG-AbeoNeural", label: "Abeo · Nigeria · male" },
-  { id: "en-NG-EzinneNeural", label: "Ezinne · Nigeria · female" },
-  { id: "en-US-GuyNeural", label: "Guy · US · ad read" },
-  { id: "en-US-JennyNeural", label: "Jenny · US · friendly" },
-  { id: "en-KE-ChilembaNeural", label: "Chilemba · Kenya · male" },
-  { id: "en-ZA-LeahNeural", label: "Leah · South Africa · female" },
-  { id: "en-US-AnaNeural", label: "Ana · US · child" },
-];
+/** @deprecated Use VOICES from voiceCatalog. Kept so older imports keep compiling. */
+export const EDGE_VOICES = VOICES;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
@@ -50,7 +40,7 @@ const edge: TTSProvider = {
     const tts = new MsEdgeTTS({ connectionTimeoutMs: 10_000, synthesisTimeoutMs: 20_000 } as never);
     const dir = fs.mkdtempSync(path.join(path.dirname(outFile), ".tts-"));
     try {
-      await withTimeout(tts.setMetadata(voice || "en-US-AndrewNeural", OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3), 15_000, "Edge TTS connect");
+      await withTimeout(tts.setMetadata(voice || "en-US-AriaNeural", OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3), 15_000, "Edge TTS connect");
       const { audioFilePath } = await withTimeout(tts.toFile(dir, text), 40_000, "Edge TTS synthesis");
       fs.renameSync(audioFilePath, outFile);
     } finally {
@@ -99,7 +89,7 @@ const espeak: TTSProvider = {
   async synth(text, voice, outFile) {
     const wav = outFile + ".wav";
     const v = /en-GB/.test(voice) ? "en-gb" : "en-us";
-    const female = /Aria|Sonia|Ezinne|Jenny|Leah/.test(voice);
+    const female = shapeIsFemale(voice);
     await withTimeout(
       new Promise<void>((res, rej) => {
         const p = spawn("espeak-ng", ["-v", v + (female ? "+f3" : "+m3"), "-s", "155", "-w", wav, text]);
@@ -131,16 +121,9 @@ function configured(): TTSProvider[] {
  * plus a small per-id offset, then loudness-normalised.
  */
 export const MMS_URL = () => getConfig("MMS_TTS_URL") || "http://tts:8000";
-const FEMALE = /Aria|Sonia|Ezinne|Jenny|Leah|Ana|female/i;
+/** Pitch/tempo for a character id. Known shapes (including legacy Edge ids) are stable; unknown ids get a small offset. */
 export function mmsShape(voice: string) {
-  let h = 0;
-  for (const c of voice || "x") h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  const j = ((h % 7) - 3) * 0.012; // ±3.6 % per-character offset
-  const child = /Ana|child/i.test(voice),
-    female = FEMALE.test(voice);
-  const pitch = (child ? 1.32 : female ? 1.16 : /Andrew|Ryan|narrat/i.test(voice) ? 0.93 : 0.86) + j;
-  const tempo = (child ? 1.04 : 1.0) + j / 2;
-  return { pitch: +pitch.toFixed(3), tempo: +tempo.toFixed(3) };
+  return voiceShape(voice);
 }
 /**
  * META CALL (speech): Meta MMS-TTS. POST {MMS_URL}/tts with {text, lang}.
@@ -169,11 +152,21 @@ const mms: TTSProvider = {
   },
 };
 
-/** Hackathon rule: every runtime AI model must be Meta's. Third-party voices stay behind THIRD_PARTY_TTS=on (off by default). */
-const thirdPartyOn = () => getConfig("THIRD_PARTY_TTS") === "on";
+/**
+ * Hackathon rule: every runtime AI model must be Meta's.
+ * Third-party voices stay behind THIRD_PARTY_TTS=on AND Meta-models-only switched off.
+ * While META_ONLY is on (the default) Edge, ElevenLabs, xAI and OpenAI-compatible TTS cannot run.
+ */
+export const thirdPartyTtsAllowed = (metaOnlyOn = metaOnly(), flag = getConfig("THIRD_PARTY_TTS")) => !metaOnlyOn && flag === "on";
+const thirdPartyOn = () => thirdPartyTtsAllowed();
 export function ttsProvider(): TTSProvider {
   const p = getConfig("TTS_PROVIDER") || "meta-mms";
   return (thirdPartyOn() && [edge, ...configured()].find((x) => x.id === p)) || mms;
+}
+/** What /api/status and the studio should say is actually voicing lines. */
+export function effectiveTts() {
+  const id = ttsProvider().id;
+  return { id, label: TTS_LABEL[id] || id };
 }
 
 /** Order: Meta MMS, (third-party only if explicitly enabled), then espeak-ng — an offline system voice, not an AI model. */
@@ -187,7 +180,10 @@ export function ttsChain(): TTSProvider[] {
     }
   return out;
 }
-export const TTS_LABEL: Record<string, string> = { "meta-mms": "Meta MMS-TTS", espeak: "espeak-ng (system voice, not AI)" };
+export const TTS_LABEL: Record<string, string> = {
+  "meta-mms": "Meta MMS-TTS (facebook/mms-tts)",
+  espeak: "espeak-ng (system voice, not AI)",
+};
 
 /** Split into sentence-sized chunks (≤ max chars) so one dropped socket only costs a short retry. */
 export function chunkText(text: string, max = 220): string[] {

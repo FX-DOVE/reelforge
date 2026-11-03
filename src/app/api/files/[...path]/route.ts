@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { MEDIA_DIR, db } from "@/lib/db";
 import { currentUser } from "@/lib/auth";
-import { remoteUrl, r2Fetch } from "@/lib/storage";
+import { ensureCached } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 const TYPES: Record<string, string> = {
@@ -10,8 +10,11 @@ const TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
+  ".gif": "image/gif",
   ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
   ".mp4": "video/mp4",
+  ".webm": "video/webm",
   ".srt": "text/plain; charset=utf-8",
   ".vtt": "text/vtt; charset=utf-8",
 };
@@ -27,25 +30,28 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
     if (!p || p.ownerId !== u.id) return new Response("forbidden", { status: 403 });
   }
   const abs = path.resolve(MEDIA_DIR, rel);
-  if (!abs.startsWith(MEDIA_DIR + path.sep)) return new Response("not found", { status: 404 });
-  if (!fs.existsSync(abs)) return fromR2(req, rel, abs);
+  if (abs !== MEDIA_DIR && !abs.startsWith(MEDIA_DIR + path.sep)) return new Response("not found", { status: 404 });
+  // Always serve bytes from this origin. Redirecting <img> to a presigned R2 URL expires, gets cached, and paints a blank frame.
+  const file = fs.existsSync(abs) && fs.statSync(abs).size > 0 ? abs : await ensureCached(rel);
+  if (!file || !fs.existsSync(file)) return new Response("not found", { status: 404 });
+  return sendFile(req, file);
+}
+
+function sendFile(req: Request, abs: string) {
   const stat = fs.statSync(abs);
   const type = TYPES[path.extname(abs).toLowerCase()] || "application/octet-stream";
   const url = new URL(req.url);
   const dl = url.searchParams.get("download");
-  const isMedia = /^(video|audio)\//.test(type) || /\.(srt|vtt)$/.test(abs);
-  // images may go to R2; video/audio/subtitles always stream from disk with proper range support (R2 redirects broke downloads)
-  if (!isMedia && !dl) {
-    const remote = await remoteUrl(rel, type);
-    if (remote) return Response.redirect(remote, 302);
-  }
+  const etag = `"${stat.size.toString(16)}-${Math.round(stat.mtimeMs).toString(16)}"`;
   const base: Record<string, string> = {
     "Content-Type": type,
     "Accept-Ranges": "bytes",
-    "Cache-Control": "private, max-age=3600",
+    "Cache-Control": "private, max-age=86400",
+    ETag: etag,
     "X-Content-Type-Options": "nosniff",
   };
   if (dl) base["Content-Disposition"] = `attachment; filename="${(dl === "1" ? path.basename(abs) : dl).replace(/[^\w.-]+/g, "_")}"`;
+  if (req.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers: base });
   const body = (start: number, end: number) => {
     const node = fs.createReadStream(abs, { start, end });
     return new ReadableStream({
@@ -77,28 +83,4 @@ export async function GET(req: Request, { params }: { params: Promise<{ path: st
     });
   }
   return new Response(body(0, stat.size - 1), { headers: { ...base, "Content-Length": String(stat.size) } });
-}
-
-/** File lives only in R2: images redirect to a presigned URL; video/audio/subtitles/downloads are proxied (same origin, range-aware, real Content-Length). */
-async function fromR2(req: Request, rel: string, abs: string) {
-  const type = TYPES[path.extname(abs).toLowerCase()] || "application/octet-stream";
-  const dl = new URL(req.url).searchParams.get("download");
-  if (!dl && type.startsWith("image/")) {
-    const u = await remoteUrl(rel, type).catch(() => null);
-    if (u) return Response.redirect(u, 302);
-  }
-  const r = await r2Fetch(rel, req.headers.get("range"));
-  if (!r) return new Response("not found", { status: 404 });
-  const h: Record<string, string> = {
-    "Content-Type": type,
-    "Accept-Ranges": "bytes",
-    "Cache-Control": "private, max-age=3600",
-    "X-Content-Type-Options": "nosniff",
-  };
-  for (const k of ["content-length", "content-range"]) {
-    const v = r.headers.get(k);
-    if (v) h[k] = v;
-  }
-  if (dl) h["Content-Disposition"] = `attachment; filename="${(dl === "1" ? path.basename(abs) : dl).replace(/[^\w.-]+/g, "_")}"`;
-  return new Response(r.body, { status: r.status, headers: h });
 }

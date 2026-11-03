@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { decrypt, encrypt, mask } from "./crypto";
+import { canonicalVoice } from "./voiceCatalog";
 
 export interface FieldDef {
   key: string;
@@ -126,7 +127,8 @@ export const FIELDS: FieldDef[] = [
     label: "Research sites where generic safety checks may be acknowledged",
     secret: false,
     group: "Meta Model API",
-    default: "youtube.com,google.com,wikipedia.org,example.com,bing.com,duckduckgo.com",
+    default: "youtube.com,google.com,wikipedia.org,bing.com,duckduckgo.com",
+    help: "Comma-separated hosts. example.com is never treated as a research site.",
   },
   { key: "CU_MAX_STEPS", label: "Computer-use step cap per task", secret: false, group: "Meta Model API", default: "12" },
   {
@@ -319,17 +321,24 @@ export const FIELDS: FieldDef[] = [
   { key: "XAI_API_KEY", label: "xAI API key", secret: true, group: "Voiceover (TTS)", env: "XAI_API_KEY" },
   { key: "TTS_COMPAT_URL", label: "OpenAI-compatible TTS base URL", secret: false, group: "Voiceover (TTS)" },
   { key: "TTS_COMPAT_KEY", label: "OpenAI-compatible TTS key", secret: true, group: "Voiceover (TTS)" },
-  { key: "DEFAULT_NARRATOR", label: "Default narrator voice (Edge)", secret: false, group: "Voiceover (TTS)", default: "en-US-AndrewNeural" },
+  {
+    key: "DEFAULT_NARRATOR",
+    label: "Default narrator voice (Meta MMS)",
+    secret: false,
+    group: "Voiceover (TTS)",
+    default: "mms-narrator",
+    help: "A pitch/tempo shape on self-hosted Meta MMS-TTS (facebook/mms-tts). Not a third-party neural voice.",
+  },
   {
     key: "VOICE_FEMALE",
     label: "Default voice for women",
     secret: false,
     group: "Voiceover (TTS)",
-    default: "en-NG-EzinneNeural",
-    help: "Characters the bible describes as female get this voice (others in the cast rotate through similar voices so everyone sounds distinct).",
+    default: "mms-ng-f",
+    help: "Characters the bible describes as female get this Meta MMS shape (others in the cast rotate through similar shapes so everyone sounds distinct).",
   },
-  { key: "VOICE_MALE", label: "Default voice for men", secret: false, group: "Voiceover (TTS)", default: "en-NG-AbeoNeural" },
-  { key: "VOICE_CHILD", label: "Default voice for children", secret: false, group: "Voiceover (TTS)", default: "en-US-AnaNeural" },
+  { key: "VOICE_MALE", label: "Default voice for men", secret: false, group: "Voiceover (TTS)", default: "mms-ng-m" },
+  { key: "VOICE_CHILD", label: "Default voice for children", secret: false, group: "Voiceover (TTS)", default: "mms-child" },
   { key: "YOUTUBE_API_KEY", label: "YouTube Data API key", secret: true, group: "Research agent", env: "YOUTUBE_API_KEY" },
   { key: "YOUTUBE_REGION", label: "Trending region", secret: false, group: "Research agent", default: "NG" },
   { key: "E2B_API_KEY", label: "E2B API key (optional cloud desktop)", secret: true, group: "Research agent", env: "E2B_API_KEY" },
@@ -392,7 +401,7 @@ export const FIELDS: FieldDef[] = [
     default: "off",
     options: ["off", "on"],
     env: "R2_ENABLED",
-    help: "on = new media is served from R2 via presigned URLs; off (or missing keys) = local disk. Switches live.",
+    help: "on = media is stored in R2 and streamed through the app (disk cache). off (or missing keys) = local disk only.",
   },
   {
     key: "R2_ACCOUNT_ID",
@@ -411,7 +420,7 @@ export const FIELDS: FieldDef[] = [
     env: "R2_SECRET_ACCESS_KEY",
     help: "Stored encrypted on the server; never shown again.",
   },
-  { key: "R2_BUCKET", label: "Bucket", secret: false, group: "Storage (Cloudflare R2)", default: "cineforge", env: "R2_BUCKET" },
+  { key: "R2_BUCKET", label: "Bucket", secret: false, group: "Storage (Cloudflare R2)", default: "reelden", env: "R2_BUCKET" },
   {
     key: "R2_ENDPOINT",
     label: "Endpoint",
@@ -427,7 +436,23 @@ export const FIELDS: FieldDef[] = [
     secret: false,
     group: "Storage (Cloudflare R2)",
     env: "R2_PUBLIC_URL",
-    help: "e.g. https://media.example.com or the bucket’s r2.dev URL — used instead of presigned links.",
+    help: "Optional CDN origin for objects. Leave empty to stream files through the app (cached on disk). A public base is used only as a stable link, never as the only way to load media.",
+  },
+  {
+    key: "QUOTA_HOURLY",
+    label: "Meta calls per user per hour",
+    secret: false,
+    group: "Usage limits",
+    default: "40",
+    help: "Caps Muse text, vision, image, Baseten and SAM calls for each signed-in account. Sign-ups spend the owner's Meta credits. 0 disables the hourly cap. The admin account is not capped.",
+  },
+  {
+    key: "QUOTA_DAILY",
+    label: "Meta calls per user per day",
+    secret: false,
+    group: "Usage limits",
+    default: "160",
+    help: "Daily cap for the same Meta API calls. 0 disables the daily cap.",
   },
 ];
 
@@ -453,10 +478,14 @@ export async function setConfig(key: string, value: string | null) {
   return db.setSetting(key, f.secret ? encrypt(value) : value);
 }
 
-/** Admin-safe view: secrets masked, never the plaintext. */
+const VOICE_FIELDS = new Set(["DEFAULT_NARRATOR", "VOICE_FEMALE", "VOICE_MALE", "VOICE_CHILD"]);
+/** Admin-safe view: secrets masked, never the plaintext. Voice fields show Meta MMS shape ids, not legacy Edge names. */
 export function configView() {
   return FIELDS.map((f) => {
-    const v = getConfig(f.key);
+    let v = getConfig(f.key);
+    if (VOICE_FIELDS.has(f.key)) v = canonicalVoice(v || f.default);
+    if (f.key === "TTS_PROVIDER" && (metaOnly() || getConfig("THIRD_PARTY_TTS") !== "on")) v = "meta-mms";
+    if (f.key === "CU_SAFE_DOMAINS" && v) v = v.split(",").map((d) => d.trim()).filter((d) => d && d !== "example.com" && !d.endsWith(".example.com")).join(",");
     const stored = !!db.getSetting(f.key);
     return {
       ...f,
@@ -468,11 +497,16 @@ export function configView() {
 }
 
 export function liveStatus() {
+  const ttsId = metaOnly() || getConfig("THIRD_PARTY_TTS") !== "on" ? "meta-mms" : getConfig("TTS_PROVIDER") || "meta-mms";
   return {
     meta: !!getConfig("META_API_KEY"),
+    metaOnly: metaOnly(),
     llm: llmLabel(),
     video: hasVideoProvider(),
-    tts: getConfig("TTS_PROVIDER") || "meta-mms",
+    tts: ttsId === "meta-mms" ? "meta-mms" : ttsId,
+    ttsLabel: ttsId === "meta-mms" ? "Meta MMS-TTS (facebook/mms-tts)" : ttsId,
+    stt: "facebook/wav2vec2-base-960h",
+    sttLabel: "Meta wav2vec2 (facebook/wav2vec2-base-960h)",
     youtube: !!getConfig("YOUTUBE_API_KEY"),
     contributor: contributorOn(),
   };

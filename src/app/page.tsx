@@ -65,10 +65,12 @@ export default function Landing() {
 
       <section id="film" className="mx-auto max-w-6xl scroll-mt-20 px-5 pt-20 sm:px-8 sm:pt-28">
         <Reveal>
-          <h2 className="text-center text-4xl font-semibold tracking-[-0.03em] sm:text-6xl">Made here. Start to finish.</h2>
+          <h2 className="text-center text-4xl font-semibold tracking-[-0.03em] sm:text-6xl">The kind of film this studio is for.</h2>
         </Reveal>
         <Reveal delay={0.08}>
-          <p className="mx-auto mt-4 max-w-xl text-center text-lg text-ink-400">Written, cast, boarded, voiced and cut in ReelForge.</p>
+          <p className="mx-auto mt-4 max-w-xl text-center text-lg text-ink-400">
+            These clips were produced outside ReelForge and are here as a style reference, not as films the studio rendered.
+          </p>
         </Reveal>
         <FilmCarousel
           reels={[

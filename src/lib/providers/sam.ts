@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { getConfig } from "../config";
 import { record } from "../usage";
+import { assertQuota } from "../quota";
 import { imageToDataUrl } from "./meta";
 
 export const samOn = () => !!getConfig("META_API_KEY") && getConfig("SAM_ENABLED") === "on";
@@ -21,6 +22,7 @@ export interface Box {
 }
 
 export async function samBoxes(file: string, concept: string): Promise<Box[]> {
+  assertQuota();
   const base = (getConfig("META_BASE_URL") || "https://api.meta.ai/v1").replace(/\/$/, "");
   const r = await fetch(base + "/responses", {
     method: "POST",

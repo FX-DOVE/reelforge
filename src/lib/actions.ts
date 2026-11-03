@@ -4,10 +4,10 @@ import { db } from "./db";
 import * as S from "./studio";
 import * as R from "./render";
 import { WRITING, setRunner } from "./jobs";
-import { enterStep } from "./usage";
+import { enterStep, enterUser } from "./usage";
 import { assignVoices, clearLinesFor } from "./voices";
 import { castLine, learn } from "./memory";
-import { EDGE_VOICES } from "./providers/tts";
+import { voiceLabel } from "./voiceCatalog";
 import type { Project } from "./types";
 // which pipeline step each action belongs to (feeds the “Built with Meta” pipeline view)
 const STEP: Record<string, string> = {
@@ -40,6 +40,8 @@ const J = (body: Record<string, unknown>, init?: { status: number }): ActionResu
 export async function runAction(id: string, b: Record<string, any>): Promise<ActionResult> {
   const p = db.getProject(id);
   if (!p) return J({ error: "not found" }, { status: 404 });
+  const uid = String(b._uid || p.ownerId || "");
+  if (uid) enterUser(uid);
   if (STEP[b.action]) enterStep(id, STEP[b.action]);
   try {
     let result: unknown = null;
@@ -300,7 +302,8 @@ export async function runAction(id: string, b: Record<string, any>): Promise<Act
     return J({ ok: true, result, project: db.getProject(id) });
   } catch (e) {
     console.error(e);
-    return J({ error: (e as Error).message, project: db.getProject(id) }, { status: 500 });
+    const message = (e as Error).message;
+    return J({ error: message, project: db.getProject(id) }, { status: /limit reached/i.test(message) ? 429 : 500 });
   }
 }
 
@@ -339,7 +342,7 @@ function teach(b: Record<string, any>, before: Project) {
     case "updateAsset": {
       const a = asset(b.assetId);
       const pt = b.patch || {};
-      if (a && pt.voice) L("voice_choice", `${castLine(a)} → ${EDGE_VOICES.find((v) => v.id === pt.voice)?.label || pt.voice}`);
+      if (a && pt.voice) L("voice_choice", `${castLine(a)} → ${voiceLabel(pt.voice)}`);
       if (a && ("description" in pt || "details" in pt)) L("bible_edit", `${a.kind} rewritten as: ${desc(a)}`);
       break;
     }

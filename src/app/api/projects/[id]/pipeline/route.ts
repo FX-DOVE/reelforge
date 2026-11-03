@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireProject } from "@/lib/guard";
-import { contributorOn, getConfig, llmChain, providerName, type LlmTask } from "@/lib/config";
+import { contributorOn, getConfig, llmChain, metaOnly, providerName, type LlmTask } from "@/lib/config";
 import { endpoint, metaLive } from "@/lib/providers/meta";
 import { samOn } from "@/lib/providers/sam";
 import { ttsProvider, TTS_LABEL } from "@/lib/providers/tts";
@@ -11,14 +11,16 @@ export const dynamic = "force-dynamic";
 type Ctx = { params: Promise<{ id: string }> };
 
 /** Meta-built models: anything served by the Meta Model API, plus Meta's open Muse Spark weights on Baseten. */
-const isMeta = (provider: string, model: string) => provider === "Meta Muse" || /muse|^meta-models\//i.test(model);
+const isMeta = (provider: string, model: string) =>
+  provider === "Meta Muse" || /muse|^meta-models\/|^sam|wav2vec|mms-tts|facebook\/mms|facebook\/wav2vec/i.test(`${provider} ${model}`);
+const NON_META_AI = /edge|eleven|xai|grok|veo|\bltx\b|minimax|hailuo|openai|claude|omni|anthropic/i;
 
 /** Process view: which model did each step of this project (from the run log), and which will run next (from routing). */
 export async function GET(_: Request, { params }: Ctx) {
   const g = await requireProject((await params).id);
   if (g instanceof Response) return g;
   const p = g.p;
-  const rows = projectTrace(p.id);
+  const rows = projectTrace(p.id).filter((r) => !(metaOnly() && NON_META_AI.test(`${r.provider} ${r.model}`)));
   const plannedLlm = (t: LlmTask, vision = false) => {
     const w = llmChain(t)[0];
     if (!w) return { provider: "Demo", model: "offline planner", meta: false };

@@ -3,6 +3,7 @@ import path from "node:path";
 import { contributorOn, fallbackKey, fallbackName, getConfig, llmChain, type LlmTask, type Provider } from "../config";
 import { mockImage } from "./mock-image";
 import { record } from "../usage";
+import { assertQuota } from "../quota";
 
 /** Meta Model API adapter (OpenAI-compatible). Live when META_API_KEY is configured, otherwise demo/mock mode. */
 export const metaLive = () => !!getConfig("META_API_KEY");
@@ -98,6 +99,7 @@ function body(model: string, messages: Msg[], o: LlmOpts, stream = false, meta =
  */
 /** Provider chain: Meta Muse first (when keyed), then the OpenAI-compatible fallback. Reports who answered. */
 export async function chatP(messages: Msg[], o: LlmOpts = {}): Promise<LlmResult> {
+  assertQuota();
   const errs: string[] = [];
   for (const w of llmChain(taskOf(o))) {
     const e = endpoint(w, o);
@@ -133,6 +135,7 @@ export async function chat(messages: Msg[], o: LlmOpts = {}) {
 
 /** Streaming chat through the chain. Yields text deltas; `meta` is filled with the provider that answered. */
 export async function* chatStream(messages: Msg[], o: LlmOpts, meta: { provider?: string; model?: string }) {
+  assertQuota();
   const errs: string[] = [];
   for (const w of llmChain(taskOf(o))) {
     const e = endpoint(w, o);
@@ -249,6 +252,7 @@ export async function generateImage(opts: {
     record("image", "Demo", "placeholder (no Meta key)", undefined, 1);
     return "mock";
   }
+  assertQuota();
   const model = getConfig("META_IMAGE_MODEL") || "muse-image-1.0";
   let r;
   const refs = (opts.refs || []).filter((f) => fs.existsSync(f)).slice(0, 4);

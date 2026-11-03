@@ -19,6 +19,7 @@ import {
 import { isApproved, isDraft, type Asset } from "@/lib/types";
 import { Drawer, SourceBadge, Spinner } from "../ui";
 import { active, type TabProps } from "./common";
+import { mediaSrc } from "@/lib/mediaSrc";
 
 const KINDS = [
   { k: "character" as const, label: "Characters", icon: User, detail: "Clothing & accessories" },
@@ -180,7 +181,7 @@ export function AssetsTab(props: TabProps & { next: () => void }) {
                     >
                       <div className={`relative ${k === "location" ? "aspect-video" : "aspect-square"} bg-ink-800`}>
                         {img ? (
-                          <img src={img.url} alt={a.name} className="absolute inset-0 h-full w-full object-cover" />
+                          <img src={mediaSrc(img.url)} alt={a.name} className="absolute inset-0 h-full w-full object-cover" />
                         ) : (
                           <div className="absolute inset-0 grid place-items-center text-ink-600">
                             {working ? <Spinner className="h-6 w-6" /> : <ImagePlus className="h-7 w-7" />}
@@ -258,7 +259,7 @@ function AssetEditor({ a, p, act, busy, setP, toast, voices, onDeleted }: TabPro
         style={{ aspectRatio: img ? p.aspect.replace(":", " / ") : a.kind === "location" ? "16 / 9" : "1 / 1" }}
       >
         {img ? (
-          <img src={img.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={mediaSrc(img.url)} alt="" className="absolute inset-0 h-full w-full object-cover" />
         ) : (
           <div className="absolute inset-0 grid place-items-center text-sm text-ink-400">No reference yet</div>
         )}
@@ -359,7 +360,7 @@ function AssetEditor({ a, p, act, busy, setP, toast, voices, onDeleted }: TabPro
                 className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${v.id === a.activeImage ? "border-brand-400" : "border-transparent opacity-70 hover:opacity-100"}`}
                 title={v.prompt}
               >
-                <img src={v.url} alt="" className="h-full w-full object-cover" />
+                <img src={mediaSrc(v.url)} alt="" className="h-full w-full object-cover" />
               </button>
             ))}
           </div>

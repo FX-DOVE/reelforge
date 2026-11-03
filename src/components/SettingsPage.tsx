@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Brain, Check, LogOut, Pencil, Trash2, X } from "lucide-react";
 import { Spinner } from "./ui";
+import { useSession } from "./Session";
 
 type Note = { id: string; text: string; category: string; at: string; hits?: number; source?: string };
 type Mem = { enabled: boolean; notes: Note[]; max: number; categories: string[] };
@@ -15,10 +16,12 @@ const CAT_LABEL: Record<string, string> = {
   voice: "Voices",
   rejects: "Things you reject",
   other: "Other",
+  unsorted: "Other notes",
 };
 
 export function SettingsPage() {
-  const [me, setMe] = useState<{ email: string; name?: string; role: string } | null>(null);
+  const session = useSession();
+  const [me, setMe] = useState<{ email: string; name?: string; role: string } | null>(session);
   const [m, setM] = useState<Mem | null>(null);
   const [edit, setEdit] = useState<{ id: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -28,27 +31,53 @@ export function SettingsPage() {
     try {
       const r = await fetch(url, { method, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined });
       const j = await r.json();
-      if (r.ok) setM((x) => ({ ...(x || { max: 40, categories: [] }), ...j }));
+      if (r.ok && j && Array.isArray(j.notes))
+        setM((x) => ({ ...(x || { max: 40, categories: Object.keys(CAT_LABEL), enabled: true }), ...j, notes: j.notes }));
     } finally {
       setBusy(false);
     }
   };
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((j) => setMe(j.user));
-    fetch("/api/me/memory")
-      .then((r) => r.json())
-      .then(setM);
+    if (session?.email) setMe(session);
+  }, [session]);
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.user?.email) setMe(j.user);
+      })
+      .catch(() => {});
+    fetch("/api/me/memory", { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !j || !Array.isArray(j.notes)) {
+          setM({ enabled: true, notes: [], max: 40, categories: Object.keys(CAT_LABEL) });
+          return;
+        }
+        setM({ enabled: j.enabled !== false, notes: j.notes, max: j.max || 40, categories: j.categories?.length ? j.categories : Object.keys(CAT_LABEL) });
+      })
+      .catch(() => setM({ enabled: true, notes: [], max: 40, categories: Object.keys(CAT_LABEL) }));
     const t = setInterval(() => {
       if (document.visibilityState === "visible")
-        fetch("/api/me/memory")
-          .then((r) => r.json())
-          .then((j) => setM((x) => (edit ? x : j)));
+        fetch("/api/me/memory", { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((j) => {
+            if (edit || !j || !Array.isArray(j.notes)) return;
+            setM({ enabled: j.enabled !== false, notes: j.notes, max: j.max || 40, categories: j.categories?.length ? j.categories : Object.keys(CAT_LABEL) });
+          })
+          .catch(() => {});
     }, 15000);
     return () => clearInterval(t);
   }, [edit]);
-  const groups = m ? m.categories.map((c) => [c, m.notes.filter((n) => n.category === c)] as const).filter(([, l]) => l.length) : [];
+  const notes = m?.notes || [];
+  const cats = m?.categories?.length ? m.categories : Object.keys(CAT_LABEL);
+  const known = new Set(cats);
+  const groups = m
+    ? [
+        ...cats.map((c) => [c, notes.filter((n) => n.category === c)] as const),
+        ["unsorted", notes.filter((n) => !known.has(n.category))] as const,
+      ].filter(([, l]) => l.length)
+    : [];
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
@@ -56,7 +85,7 @@ export function SettingsPage() {
       <section className="panel mt-6 flex flex-wrap items-center gap-3 p-5">
         <div className="min-w-0 flex-1">
           <div className="text-sm text-ink-400">Signed in as</div>
-          <div className="truncate font-medium">{me ? `${me.name ? me.name + " · " : ""}${me.email}` : "…"}</div>
+          <div className="truncate font-medium">{me?.email ? `${me.name ? me.name + " · " : ""}${me.email}` : "Loading your account…"}</div>
         </div>
         <button
           className="btn-outline h-10"

@@ -12,7 +12,7 @@ const POINTS = [
   ],
   [
     "What powers it",
-    "Meta’s Muse Spark handles writing, directing and the vision-based continuity checks. Video and voice engines are pluggable, so you can bring the providers you prefer.",
+    "Meta Muse Spark and Muse Wonder write, direct and review continuity. Muse Image paints the frames. Self-hosted Meta MMS-TTS voices each line, and Meta wav2vec2 checks that the line is clear.",
   ],
   [
     "Where we are",
@@ -44,7 +44,7 @@ export default function Page() {
       <section className="mx-auto max-w-7xl px-5 pb-20 sm:px-8">
         <img
           src="/brand/film-poster.jpg"
-          alt="Still from The Akara Girl, made in ReelForge"
+          alt="Still from The Akara Girl, a reference film shown on the site"
           loading="lazy"
           className="aspect-[21/9] w-full rounded-3xl object-cover"
         />

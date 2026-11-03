@@ -8,7 +8,7 @@ const FREE = [
   "Writers’ room, director and continuity checks",
   "Reel, the agent producer, with its own computer",
   "Voiceover, subtitles, music and MP4 export",
-  "Bring your own video-engine keys in Settings",
+  "Storyboard, voice and export on Meta models during the beta",
 ];
 const PRO = ["Higher generation limits", "Priority rendering queue", "Team workspaces", "Commercial-use terms"];
 
