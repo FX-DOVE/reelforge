@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { AgentSwitcher } from "./AgentSwitcher";
-import { ArrowUp, Check, ChevronDown, ChevronLeft, Monitor, Plus, Loader2, Paperclip, RotateCw, Square, Volume2, VolumeX, Wrench, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, ChevronLeft, Monitor, Plus, Loader2, Paperclip, RotateCw, Square, Volume2, VolumeX, Wrench, X, RotateCcw } from "lucide-react";
 import { Bot, Mascot } from "./Mascot";
 import { EDGES, useFloatBox } from "./useFloatBox";
 import { botFor, randomBot, type BotStyle } from "@/lib/botStyle";
@@ -217,6 +217,7 @@ export function FloatingAgent() {
             <button data-t="agent-new" aria-label="New agent" className="grid h-10 w-10 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white" onClick={newAgent}><Plus className="h-5 w-5" /></button>
             <DeskButton ws={cur?.id || "main"} label={cur?.title || "Reel"} />
             <button aria-label={muted ? "Unmute sounds" : "Mute sounds"} className="grid h-10 w-10 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white" onClick={mute}>{muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}</button>
+            {fb.box && <button aria-label="Reset window size and position" title="Reset size & position" className="hidden h-10 w-10 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white md:grid" onClick={fb.reset}><RotateCcw className="h-4 w-4" /></button>}
             <button aria-label="Close" className="hidden h-10 w-10 place-items-center rounded-full text-ink-400 hover:bg-white/5 hover:text-white md:grid" onClick={() => setOpen(false)}><X className="h-5 w-5" /></button>
           </div>
         </header>
