@@ -7,8 +7,26 @@ export const DATA_DIR = path.resolve(process.env.DATA_DIR || "./data");
 export const MEDIA_DIR = path.join(DATA_DIR, "media");
 const DB_FILE = path.join(DATA_DIR, "db.json");
 
-export interface UserRec { id: string; email: string; name?: string; hash: string; role: "admin" | "user"; createdAt: string; verified?: boolean; tv?: number; avatar?: string; termsAcceptedAt?: string; termsVersion?: string }
-interface DBShape { projects: Record<string, Project>; settings: Record<string, string>; users?: Record<string, UserRec>; memory?: Record<string, UserMemory>; docs?: Record<string, Record<string, { id: string; ownerId: string; updatedAt?: string }>> }
+export interface UserRec {
+  id: string;
+  email: string;
+  name?: string;
+  hash: string;
+  role: "admin" | "user";
+  createdAt: string;
+  verified?: boolean;
+  tv?: number;
+  avatar?: string;
+  termsAcceptedAt?: string;
+  termsVersion?: string;
+}
+interface DBShape {
+  projects: Record<string, Project>;
+  settings: Record<string, string>;
+  users?: Record<string, UserRec>;
+  memory?: Record<string, UserMemory>;
+  docs?: Record<string, Record<string, { id: string; ownerId: string; updatedAt?: string }>>;
+}
 
 let cache: DBShape | null = null;
 let chain: Promise<unknown> = Promise.resolve();
@@ -18,7 +36,8 @@ function load(): DBShape {
   fs.mkdirSync(MEDIA_DIR, { recursive: true });
   if (fs.existsSync(DB_FILE)) cache = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
   else cache = { projects: {}, settings: {} };
-  cache!.users ||= {}; cache!.memory ||= {};
+  cache!.users ||= {};
+  cache!.memory ||= {};
   // projects created before accounts existed belong to the admin
   for (const p of Object.values(cache!.projects)) if (!p.ownerId) p.ownerId = "admin";
   return cache!;
@@ -31,18 +50,54 @@ function persist() {
 
 export const db = {
   listProjects(ownerId?: string): Project[] {
-    return Object.values(load().projects).filter((p) => !ownerId || p.ownerId === ownerId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return Object.values(load().projects)
+      .filter((p) => !ownerId || p.ownerId === ownerId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   },
-  findUserByEmail(email: string) { return Object.values(load().users!).find((u) => u.email === email.toLowerCase()); },
-  getUser(id: string) { return load().users![id]; },
-  listUsers() { return Object.values(load().users!); },
+  findUserByEmail(email: string) {
+    return Object.values(load().users!).find((u) => u.email === email.toLowerCase());
+  },
+  getUser(id: string) {
+    return load().users![id];
+  },
+  listUsers() {
+    return Object.values(load().users!);
+  },
   /** Insert only if no account has this email — checked inside the write chain, so two simultaneous sign-ups can't both win. */
-  async insertUserUnique(u: UserRec) { return (chain = chain.then(() => { const us = load().users!; if (Object.values(us).some((x) => x.email === u.email)) return false; us[u.id] = u; persist(); return true; })) as Promise<boolean>; },
-  async deleteUser(id: string) { return (chain = chain.then(() => { delete load().users![id]; delete load().memory![id]; persist(); })); },
-  async saveUser(u: UserRec) { return (chain = chain.then(() => { load().users![u.id] = u; persist(); })); },
-  getMemory(uid: string): UserMemory { return load().memory![uid] || { enabled: true, notes: [] }; },
+  async insertUserUnique(u: UserRec) {
+    return (chain = chain.then(() => {
+      const us = load().users!;
+      if (Object.values(us).some((x) => x.email === u.email)) return false;
+      us[u.id] = u;
+      persist();
+      return true;
+    })) as Promise<boolean>;
+  },
+  async deleteUser(id: string) {
+    return (chain = chain.then(() => {
+      delete load().users![id];
+      delete load().memory![id];
+      persist();
+    }));
+  },
+  async saveUser(u: UserRec) {
+    return (chain = chain.then(() => {
+      load().users![u.id] = u;
+      persist();
+    }));
+  },
+  getMemory(uid: string): UserMemory {
+    return load().memory![uid] || { enabled: true, notes: [] };
+  },
   async setMemory(uid: string, fn: (m: UserMemory) => void) {
-    return (chain = chain.then(() => { const m = load().memory![uid] || { enabled: true, notes: [] }; fn(m); m.updatedAt = new Date().toISOString(); load().memory![uid] = m; persist(); return m; })) as Promise<UserMemory>;
+    return (chain = chain.then(() => {
+      const m = load().memory![uid] || { enabled: true, notes: [] };
+      fn(m);
+      m.updatedAt = new Date().toISOString();
+      load().memory![uid] = m;
+      persist();
+      return m;
+    })) as Promise<UserMemory>;
   },
   getProject(id: string): Project | undefined {
     return load().projects[id];
@@ -63,22 +118,44 @@ export const db = {
   },
   async deleteProject(id: string) {
     DELETED.add(id);
-    return (chain = chain.then(() => { delete load().projects[id]; persist(); }));
+    return (chain = chain.then(() => {
+      delete load().projects[id];
+      persist();
+    }));
   },
   /** Generic owner-scoped collections (agents, chats). */
   listDocs<T extends { id: string; ownerId: string; updatedAt?: string }>(kind: string, ownerId?: string): T[] {
-    const c = (load().docs ||= {})[kind] || {}; return (Object.values(c) as T[]).filter((d) => !ownerId || d.ownerId === ownerId).sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+    const c = (load().docs ||= {})[kind] || {};
+    return (Object.values(c) as T[]).filter((d) => !ownerId || d.ownerId === ownerId).sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
   },
-  getDoc<T>(kind: string, id: string): T | undefined { return ((load().docs ||= {})[kind] || {})[id] as T | undefined; },
+  getDoc<T>(kind: string, id: string): T | undefined {
+    return ((load().docs ||= {})[kind] || {})[id] as T | undefined;
+  },
   async putDoc<T extends { id: string; ownerId: string; updatedAt?: string }>(kind: string, d: T) {
-    return (chain = chain.then(() => { d.updatedAt = new Date().toISOString(); ((load().docs ||= {})[kind] ||= {})[d.id] = d; persist(); return d; })) as Promise<T>;
+    return (chain = chain.then(() => {
+      d.updatedAt = new Date().toISOString();
+      ((load().docs ||= {})[kind] ||= {})[d.id] = d;
+      persist();
+      return d;
+    })) as Promise<T>;
   },
-  async delDoc(kind: string, id: string) { return (chain = chain.then(() => { const c = (load().docs ||= {})[kind]; if (c) delete c[id]; persist(); })); },
-  getSetting(k: string) { return load().settings[k]; },
-  allSettings() { return { ...load().settings }; },
+  async delDoc(kind: string, id: string) {
+    return (chain = chain.then(() => {
+      const c = (load().docs ||= {})[kind];
+      if (c) delete c[id];
+      persist();
+    }));
+  },
+  getSetting(k: string) {
+    return load().settings[k];
+  },
+  allSettings() {
+    return { ...load().settings };
+  },
   async setSetting(k: string, v: string | undefined) {
     return (chain = chain.then(() => {
-      if (v === undefined) delete load().settings[k]; else load().settings[k] = v;
+      if (v === undefined) delete load().settings[k];
+      else load().settings[k] = v;
       persist();
     }));
   },
@@ -99,6 +176,12 @@ export function mediaPath(url: string) {
   const rel = url.replace(/^\/api\/files\//, "").split("?")[0];
   const abs = path.resolve(MEDIA_DIR, rel);
   if (!abs.startsWith(MEDIA_DIR)) throw new Error("bad path");
-  if (!fs.existsSync(abs)) { try { (globalThis as unknown as { __rfHydrate?: (r: string, a: string) => boolean }).__rfHydrate?.(rel, abs); } catch { /* not in R2 either */ } } // R2 is the primary store; disk is a cache
+  if (!fs.existsSync(abs)) {
+    try {
+      (globalThis as unknown as { __rfHydrate?: (r: string, a: string) => boolean }).__rfHydrate?.(rel, abs);
+    } catch {
+      /* not in R2 either */
+    }
+  } // R2 is the primary store; disk is a cache
   return abs;
 }

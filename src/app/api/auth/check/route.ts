@@ -4,8 +4,12 @@ import { currentUser } from "@/lib/auth";
 import { deskOwner, claimDesk } from "@/lib/deskLease";
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
-  const u = await currentUser(); if (!u) return new Response("unauthorized", { status: 401 });
+  const u = await currentUser();
+  if (!u) return new Response("unauthorized", { status: 401 });
   const uri = req.headers.get("x-forwarded-uri") || "";
-  if (uri.startsWith("/desk/")) { const c = deskOwner() === u.id ? { ok: true as const } : await claimDesk(u.id).catch(() => ({ ok: false as const })); if (!c.ok) return new Response("desktop in use by another account", { status: 403 }); }
+  if (uri.startsWith("/desk/")) {
+    const c = deskOwner() === u.id ? { ok: true as const } : await claimDesk(u.id).catch(() => ({ ok: false as const }));
+    if (!c.ok) return new Response("desktop in use by another account", { status: 403 });
+  }
   return new Response("ok");
 }

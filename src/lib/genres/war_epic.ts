@@ -1,7 +1,11 @@
 import type { GenreSkill } from "./types";
 
 export const warEpic: GenreSkill = {
-  id: "war_epic", version: "1.0.0", label: "War epic", short: "Brotherhood, sacrifice and the scale of battle seen through one unit", music: "tension",
+  id: "war_epic",
+  version: "1.0.0",
+  label: "War epic",
+  short: "Brotherhood, sacrifice and the scale of battle seen through one unit",
+  music: "tension",
   structure: [
     "Before: a quiet moment of the unit — letters, jokes, a photo.",
     "Orders: an impossible objective with a clear map (a bridge, a hill, a beach).",
@@ -11,16 +15,47 @@ export const warEpic: GenreSkill = {
     "The push: a grand, legible battle with a clear line of advance.",
     "After: silence, the objective held, a ritual for the dead.",
   ],
-  archetypes: ["Young recruit through whose eyes we see the war", "Weary sergeant who protects the unit", "Joker who keeps morale (often lost at the midpoint)", "Medic who refuses to stop", "Officer whose orders cost lives — not a cartoon villain"],
+  archetypes: [
+    "Young recruit through whose eyes we see the war",
+    "Weary sergeant who protects the unit",
+    "Joker who keeps morale (often lost at the midpoint)",
+    "Medic who refuses to stop",
+    "Officer whose orders cost lives — not a cartoon villain",
+  ],
   dialogue: {
-    rules: ["Soldiers speak in short, overlapping-in-spirit lines — but written one at a time.", "Humour is dry and dark; tenderness is understated.", "Orders are clear and spatial: 'left flank', 'the wall', 'on me'.", "Avoid real units, battles or historical figures; invent names and places."],
-    examples: ["SGT. HALE: Eyes on the wall. Nobody runs.", "PIKE: I wasn't running. I was walking fast.", "NOAH: Is it always this loud?", "SGT. HALE: Only when it matters."],
+    rules: [
+      "Soldiers speak in short, overlapping-in-spirit lines — but written one at a time.",
+      "Humour is dry and dark; tenderness is understated.",
+      "Orders are clear and spatial: 'left flank', 'the wall', 'on me'.",
+      "Avoid real units, battles or historical figures; invent names and places.",
+    ],
+    examples: [
+      "SGT. HALE: Eyes on the wall. Nobody runs.",
+      "PIKE: I wasn't running. I was walking fast.",
+      "NOAH: Is it always this loud?",
+      "SGT. HALE: Only when it matters.",
+    ],
   },
   shots: {
     lenses: "Ultra-wide 18mm for battle scale, 35mm handheld at soldier height for immersion, 100mm for faces in the chaos.",
-    moves: "Long tracking shots following one soldier across the battlefield, crane-ups to reveal scale, handheld shake inside trenches, static wide tableaux for aftermath.",
-    coverage: ["Battle geography master (where our side, the enemy and the objective are)", "Soldier-height tracking", "Sergeant command close-up", "Explosion/impact wide (behind subjects)", "Recruit POV", "Aftermath tableau"],
-    framing: { establish: "extreme wide map shot: our line frame-left, objective frame-right", advance: "tracking medium behind soldiers moving L→R", impact: "wide, blast behind the subjects, debris", dialogue: "tight close-ups, faces dirty and lit by fire", grief: "static medium, long hold", aftermath: "wide tableau, smoke, silence" },
+    moves:
+      "Long tracking shots following one soldier across the battlefield, crane-ups to reveal scale, handheld shake inside trenches, static wide tableaux for aftermath.",
+    coverage: [
+      "Battle geography master (where our side, the enemy and the objective are)",
+      "Soldier-height tracking",
+      "Sergeant command close-up",
+      "Explosion/impact wide (behind subjects)",
+      "Recruit POV",
+      "Aftermath tableau",
+    ],
+    framing: {
+      establish: "extreme wide map shot: our line frame-left, objective frame-right",
+      advance: "tracking medium behind soldiers moving L→R",
+      impact: "wide, blast behind the subjects, debris",
+      dialogue: "tight close-ups, faces dirty and lit by fire",
+      grief: "static medium, long hold",
+      aftermath: "wide tableau, smoke, silence",
+    },
   },
   action: [
     "Always keep the direction of advance: our side moves L→R toward the objective in every battle shot.",
@@ -41,7 +76,13 @@ export const warEpic: GenreSkill = {
     { risk: "Direction of advance flips", counter: "State 'our side moves left to right' in every battle prompt." },
     { risk: "Real-world insignia or flags", counter: "Use invented, simple insignia; no real flags or symbols." },
   ],
-  checklist: ["Direction of advance constant (L→R)", "Unit headcount decreases, never resets", "Mud, dirt and bandages accumulate", "Weather and smoke level consistent per scene", "Invented insignia identical across shots"],
+  checklist: [
+    "Direction of advance constant (L→R)",
+    "Unit headcount decreases, never resets",
+    "Mud, dirt and bandages accumulate",
+    "Weather and smoke level consistent per scene",
+    "Invented insignia identical across shots",
+  ],
   keywords: ["war", "battle", "soldier", "army", "trench", "frontline", "platoon", "siege", "invasion"],
   example: `EXT. RUINED BRIDGE - DAWN
 Fog. SGT. HALE (40s, square jaw, grey stubble, mud-brown greatcoat, dented helmet) leads five SOLDIERS along a wall, moving L→R. NOAH (19, freckles, oversized helmet) trails.

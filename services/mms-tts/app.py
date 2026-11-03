@@ -18,6 +18,7 @@ class Req(BaseModel):
     lang: str = "eng"
 @app.get("/health")
 def health(): return {"ok": True, "loaded": list(_m)}
+# Meta MMS-TTS (facebook/mms-tts-<lang>, VITS). In: JSON {text, lang}. Out: mono 16-bit WAV at the model sample rate.
 @app.post("/tts")
 def tts(r: Req):
     if r.lang not in LANGS: raise HTTPException(400, "lang")

@@ -14,6 +14,14 @@ export async function verifyToken(t: string | undefined): Promise<SessionUser | 
   try {
     const { payload } = await jwtVerify(t, await sessionKey());
     if (!payload.sub) return null;
-    return { id: String(payload.uid || payload.sub), email: String(payload.sub), role: payload.role === "admin" ? "admin" : "user", name: payload.name ? String(payload.name) : undefined, tv: Number(payload.tv || 0) };
-  } catch { return null; }
+    return {
+      id: String(payload.uid || payload.sub),
+      email: String(payload.sub),
+      role: payload.role === "admin" ? "admin" : "user",
+      name: payload.name ? String(payload.name) : undefined,
+      tv: Number(payload.tv || 0),
+    };
+  } catch {
+    return null;
+  }
 }

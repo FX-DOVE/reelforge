@@ -13,7 +13,14 @@ export type { GenreId, GenreSkill } from "./types";
 export { DIALOGUE_RULES, SPATIAL_RULES } from "./common";
 
 export const GENRES: Record<GenreId, GenreSkill> = {
-  blockbuster, martial_comedy: martialComedy, commando, war_epic: warEpic, kdrama_romcom: kdramaRomcom, epic_fantasy: epicFantasy, prison_break: prisonBreak, nollywood,
+  blockbuster,
+  martial_comedy: martialComedy,
+  commando,
+  war_epic: warEpic,
+  kdrama_romcom: kdramaRomcom,
+  epic_fantasy: epicFantasy,
+  prison_break: prisonBreak,
+  nollywood,
 };
 export const GENRE_IDS = Object.keys(GENRES) as GenreId[];
 export const DEFAULT_GENRE: GenreId = "blockbuster";
@@ -33,7 +40,12 @@ export function detectGenre(text: string): GenreId | undefined {
   return best?.id;
 }
 
-interface HasGenre { filmStyle?: string; idea?: string; title?: string; mode?: string }
+interface HasGenre {
+  filmStyle?: string;
+  idea?: string;
+  title?: string;
+  mode?: string;
+}
 /** The skill a project uses: its chosen film style, else a keyword guess, else the default (American blockbuster). */
 export function genreOf(p: HasGenre): GenreSkill {
   if (isGenre(p.filmStyle)) return GENRES[p.filmStyle];
@@ -72,7 +84,9 @@ Camera moves: ${g.shots.moves}
 Coverage pattern per scene:
 ${list(g.shots.coverage)}
 Framing per beat type (tag each shot's "beat" with one of: ${Object.keys(g.shots.framing).join(", ")}):
-${Object.entries(g.shots.framing).map(([k, v]) => `- ${k}: ${v}`).join("\n")}
+${Object.entries(g.shots.framing)
+  .map(([k, v]) => `- ${k}: ${v}`)
+  .join("\n")}
 SPATIAL CONTINUITY:
 ${list(SPATIAL_RULES)}
 ${g.action ? `ACTION / FIGHT CHOREOGRAPHY (split into short readable beats, one action per shot):\n${list(g.action)}\n` : ""}${g.romance ? `ROMANCE / TWO-SHOT & OTS PATTERNS:\n${list(g.romance)}\n` : ""}${g.comedy ? `COMEDIC TIMING:\n${list(g.comedy)}\n` : ""}LIGHTING: ${g.lighting}
@@ -87,8 +101,13 @@ ${g.example}`;
     case "image":
       return `${g.look}. Lighting: ${g.lighting.split(",")[0]}. Grade: ${g.grade.split(",")[0]}.`;
     case "video":
-      return `${g.motion}. ${g.failures.slice(0, 2).map((f) => f.counter).join(" ")}`;
+      return `${g.motion}. ${g.failures
+        .slice(0, 2)
+        .map((f) => f.counter)
+        .join(" ")}`;
     case "continuity":
-      return `GENRE CONTINUITY CHECKLIST (${g.label}) — flag any violation:\n${list(g.checklist)}\nAlso check: ${SPATIAL_RULES.slice(0, 3).map((r) => r.split(":")[0]).join("; ")}; exact headcount; no extra limbs or merged bodies; same face as the reference sheet.`;
+      return `GENRE CONTINUITY CHECKLIST (${g.label}) — flag any violation:\n${list(g.checklist)}\nAlso check: ${SPATIAL_RULES.slice(0, 3)
+        .map((r) => r.split(":")[0])
+        .join("; ")}; exact headcount; no extra limbs or merged bodies; same face as the reference sheet.`;
   }
 }

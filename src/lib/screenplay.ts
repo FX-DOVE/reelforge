@@ -1,6 +1,9 @@
 /** Lightweight screenplay parser used for formatting, asset extraction and storyboard planning. */
 export type Line = { type: "title" | "scene" | "action" | "character" | "paren" | "dialog" | "transition" | "blank"; text: string };
-export interface ParsedScene { heading: string; items: { kind: "action" | "dialog"; speaker?: string; text: string }[] }
+export interface ParsedScene {
+  heading: string;
+  items: { kind: "action" | "dialog"; speaker?: string; text: string }[];
+}
 
 export function classify(script: string): Line[] {
   const raw = script.replace(/\r/g, "").split("\n");
@@ -30,9 +33,19 @@ export function parseScenes(script: string): { title: string; scenes: ParsedScen
   let cur: ParsedScene | null = null;
   let speaker = "";
   for (const l of lines) {
-    if (l.type === "title") { title = l.text.replace(/^title\s*:\s*/i, ""); continue; }
-    if (l.type === "scene") { cur = { heading: l.text.toUpperCase(), items: [] }; scenes.push(cur); continue; }
-    if (!cur && (l.type === "action" || l.type === "character")) { cur = { heading: "SCENE 1", items: [] }; scenes.push(cur); }
+    if (l.type === "title") {
+      title = l.text.replace(/^title\s*:\s*/i, "");
+      continue;
+    }
+    if (l.type === "scene") {
+      cur = { heading: l.text.toUpperCase(), items: [] };
+      scenes.push(cur);
+      continue;
+    }
+    if (!cur && (l.type === "action" || l.type === "character")) {
+      cur = { heading: "SCENE 1", items: [] };
+      scenes.push(cur);
+    }
     if (!cur) continue;
     if (l.type === "character") speaker = l.text.replace(/\s*\(.*\)\s*$/, "").trim();
     else if (l.type === "dialog") {

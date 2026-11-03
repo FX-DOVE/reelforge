@@ -4,7 +4,13 @@ export type Aspect = "9:16" | "16:9" | "1:1" | "4:5";
 export type VisualStyle = "realistic" | "pixar" | "cartoon" | "anime" | "custom";
 export type OutputType = "image" | "video";
 
-export interface ImageVersion { id: string; url: string; prompt: string; createdAt: string; source: "meta" | "mock" | "upload" }
+export interface ImageVersion {
+  id: string;
+  url: string;
+  prompt: string;
+  createdAt: string;
+  source: "meta" | "mock" | "upload";
+}
 
 export interface Asset {
   id: string;
@@ -47,9 +53,25 @@ export interface Shot {
   clipUrl?: string;
   clipProvider?: string;
   /** video job (queue with retries + provider fallback) */
-  clipJob?: { state: "queued" | "running" | "done" | "failed"; provider?: string; attempt?: number; progress?: number; error?: string; estUsd?: number; updatedAt?: string };
+  clipJob?: {
+    state: "queued" | "running" | "done" | "failed";
+    provider?: string;
+    attempt?: number;
+    progress?: number;
+    error?: string;
+    estUsd?: number;
+    updatedAt?: string;
+  };
   audioUrl?: string;
-  continuity?: { ok: boolean; issues: string[]; checkedAt: string; source: string; fix?: string; state?: "checking" | "fixing" | "passed" | "fixed" | "attention"; attempts?: number };
+  continuity?: {
+    ok: boolean;
+    issues: string[];
+    checkedAt: string;
+    source: string;
+    fix?: string;
+    state?: "checking" | "fixing" | "passed" | "fixed" | "attention";
+    attempts?: number;
+  };
   trimStart?: number;
   trimEnd?: number;
   /** set when the user picks a length by hand; otherwise the cut fits each shot to its voice line */
@@ -63,19 +85,79 @@ export interface Shot {
   /** screen direction / axis note, e.g. "Ada frame-left looking right; moves L→R" */
   screen?: string;
   /** automatic dialogue-clarity check of the voiced line (speech-to-text round trip) */
-  clarity?: { audio?: string; ok: boolean; wer?: number; cer?: number; heard?: string; wps?: number; issues: string[]; attempts: number; checkedAt: string; source: string };
+  clarity?: {
+    audio?: string;
+    ok: boolean;
+    wer?: number;
+    cer?: number;
+    heard?: string;
+    wps?: number;
+    issues: string[];
+    attempts: number;
+    checkedAt: string;
+    source: string;
+  };
 }
 
-export interface Scene { id: string; heading: string; summary: string; shots: Shot[] }
+export interface Scene {
+  id: string;
+  heading: string;
+  summary: string;
+  shots: Shot[];
+}
 
-export interface Idea { title: string; logline: string; hook?: string; beats?: string[]; characters?: { name: string; description: string }[] }
-export interface ChatMsg { role: "user" | "assistant"; content: string; at: string; provider?: string; ideas?: Idea[]; kind?: "note" | "research" }
-export interface ResearchNote { id: string; goal: string; notes: string; at: string; provider?: string }
+export interface Idea {
+  title: string;
+  logline: string;
+  hook?: string;
+  beats?: string[];
+  characters?: { name: string; description: string }[];
+}
+export interface ChatMsg {
+  role: "user" | "assistant";
+  content: string;
+  at: string;
+  provider?: string;
+  ideas?: Idea[];
+  kind?: "note" | "research";
+}
+export interface ResearchNote {
+  id: string;
+  goal: string;
+  notes: string;
+  at: string;
+  provider?: string;
+}
 
-export interface RenderJob { status: "idle" | "queued" | "running" | "done" | "error"; progress: number; message: string; url?: string; updatedAt: string; review?: string; warnings?: string[]; motion?: string; srtUrl?: string; loudness?: number; jobId?: string; startedAt?: string; attempts?: number }
+export interface RenderJob {
+  status: "idle" | "queued" | "running" | "done" | "error";
+  progress: number;
+  message: string;
+  url?: string;
+  updatedAt: string;
+  review?: string;
+  warnings?: string[];
+  motion?: string;
+  srtUrl?: string;
+  loudness?: number;
+  jobId?: string;
+  startedAt?: string;
+  attempts?: number;
+}
 
-export interface MemoryNote { id: string; text: string; category: "genre" | "pacing" | "tone" | "visual" | "characters" | "wardrobe" | "voice" | "rejects" | "other"; at: string; source?: string; hits?: number }
-export interface UserMemory { enabled: boolean; notes: MemoryNote[]; updatedAt?: string }
+export interface MemoryNote {
+  id: string;
+  text: string;
+  category: "genre" | "pacing" | "tone" | "visual" | "characters" | "wardrobe" | "voice" | "rejects" | "other";
+  at: string;
+  source?: string;
+  hits?: number;
+}
+export interface UserMemory {
+  enabled: boolean;
+  notes: MemoryNote[];
+  updatedAt?: string;
+}
 
 export interface Project {
   /** user id of the creator who owns this project ("admin" for legacy projects) */
@@ -145,5 +227,24 @@ export function aspectSize(a: Aspect, long = 1280): { w: number; h: number } {
   return { w: Math.round((long * x) / y / 2) * 2, h: long };
 }
 
-export interface AutoSource { kind: "youtube" | "web" | "transcript" | "desktop"; title: string; url?: string; meta?: string }
-export interface AutoRun { id: string; prompt: string; status: "running" | "done" | "error"; step: string; steps: { at: string; text: string }[]; sources: AutoSource[]; researchId?: string; targetSec?: number; estSec?: number; startedAt: string; finishedAt?: string; error?: string; provider?: string }
+export interface AutoSource {
+  kind: "youtube" | "web" | "transcript" | "desktop";
+  title: string;
+  url?: string;
+  meta?: string;
+}
+export interface AutoRun {
+  id: string;
+  prompt: string;
+  status: "running" | "done" | "error";
+  step: string;
+  steps: { at: string; text: string }[];
+  sources: AutoSource[];
+  researchId?: string;
+  targetSec?: number;
+  estSec?: number;
+  startedAt: string;
+  finishedAt?: string;
+  error?: string;
+  provider?: string;
+}

@@ -11,14 +11,31 @@ export async function PublicNav({ overlay = false }: { overlay?: boolean }) {
   return (
     <header className={`${overlay ? "absolute" : "sticky border-b border-black/[0.06] bg-[#fff]/80 backdrop-blur-xl"} inset-x-0 top-0 z-40 pt-safe`}>
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-5 sm:px-8">
-        <Link href={signedIn ? "/?site" : "/"} aria-label="ReelForge Studio home"><Logo /></Link>
+        <Link href={signedIn ? "/?site" : "/"} aria-label="ReelForge Studio home">
+          <Logo />
+        </Link>
         <nav className="hidden items-center gap-1 md:flex">
-          {PUBLIC_LINKS.map((l) => <Link key={l.href} href={l.href} className="rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:text-white">{l.label}</Link>)}
+          {PUBLIC_LINKS.map((l) => (
+            <Link key={l.href} href={l.href} className="rounded-lg px-3 py-2 text-sm text-white/70 transition-colors hover:text-white">
+              {l.label}
+            </Link>
+          ))}
         </nav>
         <div className="flex items-center gap-2">
-          {signedIn ? <Link href="/dashboard" className="btn-primary hidden h-10 md:inline-flex">Dashboard</Link> : <>
-            <Link href="/login" className="btn-ghost hidden h-10 md:inline-flex">Log in</Link>
-            <Link href="/signup" className="btn-brand h-10 rounded-full px-4">Start creating</Link></>}
+          {signedIn ? (
+            <Link href="/dashboard" className="btn-primary hidden h-10 md:inline-flex">
+              Dashboard
+            </Link>
+          ) : (
+            <>
+              <Link href="/login" className="btn-ghost hidden h-10 md:inline-flex">
+                Log in
+              </Link>
+              <Link href="/signup" className="btn-brand h-10 rounded-full px-4">
+                Start creating
+              </Link>
+            </>
+          )}
           <PublicMenu signedIn={signedIn} />
         </div>
       </div>
@@ -28,9 +45,31 @@ export async function PublicNav({ overlay = false }: { overlay?: boolean }) {
 
 export function PublicFooter() {
   const cols: [string, { href: string; label: string }[]][] = [
-    ["Product", [{ href: "/#features", label: "Features" }, { href: "/#how", label: "How it works" }, { href: "/#models", label: "Meta models" }, { href: "/pricing", label: "Pricing" }]],
-    ["Company", [{ href: "/about", label: "About" }, { href: "/faq", label: "FAQ" }, { href: "/terms", label: "Terms" }, { href: "/privacy", label: "Privacy" }]],
-    ["Account", [{ href: "/signup", label: "Sign up" }, { href: "/login", label: "Log in" }]],
+    [
+      "Product",
+      [
+        { href: "/#features", label: "Features" },
+        { href: "/#how", label: "How it works" },
+        { href: "/#models", label: "Meta models" },
+        { href: "/pricing", label: "Pricing" },
+      ],
+    ],
+    [
+      "Company",
+      [
+        { href: "/about", label: "About" },
+        { href: "/faq", label: "FAQ" },
+        { href: "/terms", label: "Terms" },
+        { href: "/privacy", label: "Privacy" },
+      ],
+    ],
+    [
+      "Account",
+      [
+        { href: "/signup", label: "Sign up" },
+        { href: "/login", label: "Log in" },
+      ],
+    ],
   ];
   return (
     <footer className="border-t border-white/[0.06] bg-ink-950">
@@ -42,7 +81,15 @@ export function PublicFooter() {
         {cols.map(([h, ls]) => (
           <div key={h}>
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-ink-500">{h}</p>
-            <ul className="mt-4 space-y-2.5">{ls.map((l) => <li key={l.href}><Link href={l.href} className="text-sm text-ink-300 hover:text-white">{l.label}</Link></li>)}</ul>
+            <ul className="mt-4 space-y-2.5">
+              {ls.map((l) => (
+                <li key={l.href}>
+                  <Link href={l.href} className="text-sm text-ink-300 hover:text-white">
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         ))}
       </div>
@@ -64,8 +111,12 @@ export function CtaBand({ title = "Your first film is one sentence away.", sub =
         <h2 className="max-w-2xl text-4xl font-semibold leading-[1.05] tracking-[-0.03em] sm:text-5xl">{title}</h2>
         <p className="mt-4 max-w-md text-ink-300">{sub}</p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link href="/signup" className="btn-brand h-12 rounded-full px-7 text-base">Start creating <ArrowRight className="h-4 w-4" /></Link>
-          <Link href="/login" className="btn-outline h-12 rounded-full px-7 text-base">Log in</Link>
+          <Link href="/signup" className="btn-brand h-12 rounded-full px-7 text-base">
+            Start creating <ArrowRight className="h-4 w-4" />
+          </Link>
+          <Link href="/login" className="btn-outline h-12 rounded-full px-7 text-base">
+            Log in
+          </Link>
         </div>
       </div>
     </section>

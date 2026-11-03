@@ -3,7 +3,8 @@ import crypto from "node:crypto";
 function key() {
   const s = process.env.APP_SECRET;
   if (!s || s.length < 16) {
-    if (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build") console.warn("[opie] APP_SECRET is not set; using an insecure dev secret");
+    if (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build")
+      console.warn("[opie] APP_SECRET is not set; using an insecure dev secret");
     return crypto.createHash("sha256").update("opie-dev-insecure-secret").digest();
   }
   return crypto.createHash("sha256").update(s).digest();
@@ -20,4 +21,6 @@ export function decrypt(blob: string) {
   d.setAuthTag(b.subarray(12, 28));
   return Buffer.concat([d.update(b.subarray(28)), d.final()]).toString("utf8");
 }
-export function mask(v: string) { return v.length <= 8 ? "••••" : v.slice(0, 4) + "••••" + v.slice(-4); }
+export function mask(v: string) {
+  return v.length <= 8 ? "••••" : v.slice(0, 4) + "••••" + v.slice(-4);
+}

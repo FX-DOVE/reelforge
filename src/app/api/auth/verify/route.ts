@@ -11,7 +11,8 @@ export async function GET(req: Request) {
   const u = uid && db.getUser(uid);
   if (!u) return go("/login?e=link");
   const first = u.verified === false;
-  u.verified = true; await db.saveUser(u);
+  u.verified = true;
+  await db.saveUser(u);
   await createSession({ id: u.id, email: u.email, role: u.role === "admin" ? "admin" : "user", name: u.name });
   if (first) mailTo(u.id, "welcome");
   return go("/dashboard?welcome=1");

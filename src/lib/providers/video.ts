@@ -4,8 +4,21 @@ import { ffmpeg } from "../ffmpeg";
 import { aspectSize, type Aspect } from "../types";
 
 /** First-frame → last-frame video generation. Providers are plug-ins selected in Admin. */
-export interface VideoRequest { startFrame: string; endFrame?: string; prompt: string; aspect: Aspect; durationSec: number; outFile: string; projectId?: string; shotId?: string }
-export interface VideoProvider { id: string; label: string; generate(r: VideoRequest, o?: { key: string; model?: string; base?: string }): Promise<void> }
+export interface VideoRequest {
+  startFrame: string;
+  endFrame?: string;
+  prompt: string;
+  aspect: Aspect;
+  durationSec: number;
+  outFile: string;
+  projectId?: string;
+  shotId?: string;
+}
+export interface VideoProvider {
+  id: string;
+  label: string;
+  generate(r: VideoRequest, o?: { key: string; model?: string; base?: string }): Promise<void>;
+}
 
 /** Demo provider: a local motion clip (push-in on the start frame, crossfade into the end frame). */
 export const mockVideo: VideoProvider = {
@@ -14,13 +27,47 @@ export const mockVideo: VideoProvider = {
   async generate(r) {
     const { w, h } = aspectSize(r.aspect, 1280);
     const d = Math.max(2, Math.min(10, r.durationSec));
-    const fps = 25, n = Math.round(d * fps);
-    const zp = (i: string) => `[${i}:v]scale=${w * 2}:${h * 2}:force_original_aspect_ratio=increase,crop=${w * 2}:${h * 2},zoompan=z='min(1+0.0015*on,1.25)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${n}:s=${w}x${h}:fps=${fps},setsar=1`;
+    const fps = 25,
+      n = Math.round(d * fps);
+    const zp = (i: string) =>
+      `[${i}:v]scale=${w * 2}:${h * 2}:force_original_aspect_ratio=increase,crop=${w * 2}:${h * 2},zoompan=z='min(1+0.0015*on,1.25)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${n}:s=${w}x${h}:fps=${fps},setsar=1`;
     if (r.endFrame && fs.existsSync(r.endFrame)) {
       const fade = Math.min(1.2, d / 3);
-      await ffmpeg(["-i", r.startFrame, "-i", r.endFrame, "-filter_complex", `${zp("0")}[a];${zp("1")}[b];[a][b]xfade=transition=fade:duration=${fade}:offset=${(d - fade).toFixed(2)},trim=duration=${d},format=yuv420p[v]`, "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", r.outFile]);
+      await ffmpeg([
+        "-i",
+        r.startFrame,
+        "-i",
+        r.endFrame,
+        "-filter_complex",
+        `${zp("0")}[a];${zp("1")}[b];[a][b]xfade=transition=fade:duration=${fade}:offset=${(d - fade).toFixed(2)},trim=duration=${d},format=yuv420p[v]`,
+        "-map",
+        "[v]",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "23",
+        r.outFile,
+      ]);
     } else {
-      await ffmpeg(["-i", r.startFrame, "-filter_complex", `${zp("0")},format=yuv420p[v]`, "-map", "[v]", "-t", String(d), "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", r.outFile]);
+      await ffmpeg([
+        "-i",
+        r.startFrame,
+        "-filter_complex",
+        `${zp("0")},format=yuv420p[v]`,
+        "-map",
+        "[v]",
+        "-t",
+        String(d),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "23",
+        r.outFile,
+      ]);
     }
   },
 };
@@ -38,8 +85,12 @@ export const veoVideo: VideoProvider = {
     if (r.endFrame) instance.lastFrame = { bytesBase64Encoded: b64(r.endFrame), mimeType: "image/png" };
     const base = (o?.base || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "");
     const start = await fetch(`${base}/models/${model}:predictLongRunning`, {
-      method: "POST", headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
-      body: JSON.stringify({ instances: [instance], parameters: { aspectRatio: r.aspect === "9:16" ? "9:16" : "16:9", durationSeconds: r.durationSec >= 7 ? 8 : r.durationSec >= 5 ? 6 : 4 } }),
+      method: "POST",
+      headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instances: [instance],
+        parameters: { aspectRatio: r.aspect === "9:16" ? "9:16" : "16:9", durationSeconds: r.durationSec >= 7 ? 8 : r.durationSec >= 5 ? 6 : 4 },
+      }),
     });
     if (!start.ok) throw new Error("Veo start " + start.status + " " + (await start.text()).slice(0, 300));
     const op = await start.json();

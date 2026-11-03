@@ -16,7 +16,14 @@ export const metadata: Metadata = {
   applicationName: "ReelForge Studio",
   openGraph: { title: "ReelForge Studio", description: "Idea to finished film in one AI studio.", images: ["/brand/hero-poster.jpg"] },
 };
-export const viewport: Viewport = { themeColor: "#ffffff", width: "device-width", initialScale: 1, maximumScale: 1, interactiveWidget: "resizes-content", viewportFit: "cover" };
+export const viewport: Viewport = {
+  themeColor: "#ffffff",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  interactiveWidget: "resizes-content",
+  viewportFit: "cover",
+};
 
 // Runs before any app code: tag same-origin fetch/XHR so the tunnel never swaps a response for its HTML warning
 // page, and (on tunnel hosts only) install the service worker that does the same for scripts and images. On the real domain any old
@@ -33,8 +40,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const signedIn = !!(await currentUser());
   return (
     <html lang="en" className={`${inter.variable} ${display.variable} ${mono.variable}`} suppressHydrationWarning>
-      <head><script dangerouslySetInnerHTML={{ __html: TUNNEL }} /></head>
-      <body className="min-h-dvh font-sans">{children}{signedIn && <><FloatingAgent /><DesktopWidget /><TermsGate /></>}</body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: TUNNEL }} />
+      </head>
+      <body className="min-h-dvh font-sans">
+        {children}
+        {signedIn && (
+          <>
+            <FloatingAgent />
+            <DesktopWidget />
+            <TermsGate />
+          </>
+        )}
+      </body>
     </html>
   );
 }

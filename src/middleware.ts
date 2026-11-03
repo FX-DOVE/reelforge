@@ -24,7 +24,9 @@ export async function middleware(req: NextRequest) {
   }
   if (user) return NextResponse.next();
   if (api) return NextResponse.json({ error: "Please sign in." }, { status: 401 });
-  const u = req.nextUrl.clone(); u.pathname = "/login"; u.search = `?next=${encodeURIComponent(pathname + search)}`;
+  const u = req.nextUrl.clone();
+  u.pathname = "/login";
+  u.search = `?next=${encodeURIComponent(pathname + search)}`;
   return NextResponse.redirect(u);
 }
 // every page and API route; static assets (_next, files with an extension) are skipped

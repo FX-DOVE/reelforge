@@ -10,12 +10,42 @@ import { FORMATS } from "./types";
 
 /** ReelForge assistant: a conversational agent with tool calling over the studio's own actions. */
 type Turn = { role: "user" | "assistant" | "tool"; content: string; at: string; tool?: string; ok?: boolean };
-export interface Persona { agentId: string; name: string; brief?: string; notes?: string[]; filmStyle?: string; projectId?: string; approval?: "auto" | "key"; others?: string; onNote?: (n: string) => Promise<void> }
-interface Conv { persona?: Persona; id: string; ownerId?: string; projectId?: string; turns: Turn[]; busy: boolean; interrupts: string[]; abort: boolean; researchId?: string; lastIdeas: Idea[]; autoIds?: string[]; siteId?: string }
+export interface Persona {
+  agentId: string;
+  name: string;
+  brief?: string;
+  notes?: string[];
+  filmStyle?: string;
+  projectId?: string;
+  approval?: "auto" | "key";
+  others?: string;
+  onNote?: (n: string) => Promise<void>;
+}
+interface Conv {
+  persona?: Persona;
+  id: string;
+  ownerId?: string;
+  projectId?: string;
+  turns: Turn[];
+  busy: boolean;
+  interrupts: string[];
+  abort: boolean;
+  researchId?: string;
+  lastIdeas: Idea[];
+  autoIds?: string[];
+  siteId?: string;
+}
 const g = globalThis as unknown as { __opieConvs?: Map<string, Conv> };
 const convs = (g.__opieConvs ||= new Map<string, Conv>());
 export const getConv = (id: string) => convs.get(id);
-export function forgetProjectInConvs(pid: string) { for (const c of convs.values()) if (c.projectId === pid) { c.projectId = undefined; c.abort = true; c.turns = c.turns.filter((t) => t.role === "user").slice(-4); } }
+export function forgetProjectInConvs(pid: string) {
+  for (const c of convs.values())
+    if (c.projectId === pid) {
+      c.projectId = undefined;
+      c.abort = true;
+      c.turns = c.turns.filter((t) => t.role === "user").slice(-4);
+    }
+}
 const wsOf = (c: { id: string }) => (c.id.includes("~") ? c.id.split("~")[0] : "main"); // this agent's own workspace (same key as its desktop)
 const owns = (c: Conv, p: Project) => !c.ownerId || c.ownerId === "admin" || p.ownerId === c.ownerId;
 
@@ -27,19 +57,40 @@ async function act(id: string, body: Record<string, unknown>) {
   if (r.status >= 400) throw new Error(j.error || `${body.action} failed (${r.status})`);
   return j;
 }
-const proj = (c: Conv) => { const p = c.projectId && db.getProject(c.projectId); if (!p || !owns(c, p)) throw new Error("No project is open yet — create_project or open_project first."); return p; };
+const proj = (c: Conv) => {
+  const p = c.projectId && db.getProject(c.projectId);
+  if (!p || !owns(c, p)) throw new Error("No project is open yet — create_project or open_project first.");
+  return p;
+};
 /** Production pipeline used when a weak model under-plans: next missing stage the user asked for. */
 const STAGES: [string, RegExp, (p: Project) => boolean][] = [
   ["write_script", /script|write|all the way|end.to.end|full|complete|render|video|ad\b|make/i, (p) => !!p.script.trim()],
   ["extract_assets", /asset|character|all the way|end.to.end|full|complete|render|video|storyboard|make/i, (p) => p.assets.length > 0],
-  ["generate_asset_images", /asset|image|all the way|end.to.end|full|complete|render|video|make/i, (p) => p.assets.length > 0 && p.assets.every((a) => a.activeImage)],
+  [
+    "generate_asset_images",
+    /asset|image|all the way|end.to.end|full|complete|render|video|make/i,
+    (p) => p.assets.length > 0 && p.assets.every((a) => a.activeImage),
+  ],
   ["build_storyboard", /storyboard|shot|all the way|end.to.end|full|complete|render|video|make/i, (p) => p.scenes.some((s) => s.shots.length)],
-  ["generate_frames", /frame|storyboard|all the way|end.to.end|full|complete|render|video|make/i, (p) => shots(p).length > 0 && shots(p).every((s) => s.activeStart)],
-  ["voiceover", /voice|narrat|all the way|end.to.end|full|complete|render|make/i, (p) => shots(p).length > 0 && shots(p).every((s) => s.audioUrl || !(s.dialogue || s.narration))],
+  [
+    "generate_frames",
+    /frame|storyboard|all the way|end.to.end|full|complete|render|video|make/i,
+    (p) => shots(p).length > 0 && shots(p).every((s) => s.activeStart),
+  ],
+  [
+    "voiceover",
+    /voice|narrat|all the way|end.to.end|full|complete|render|make/i,
+    (p) => shots(p).length > 0 && shots(p).every((s) => s.audioUrl || !(s.dialogue || s.narration)),
+  ],
   ["render_video", /render|all the way|end.to.end|full|complete|final video|make/i, (p) => p.render.status === "done"],
 ];
 export function nextStage(p: Project | undefined, request: string, tried: string[]) {
-  if (/web ?site|landing page|web ?page|\bsite\b|html|blog|article|e-?mail|newsletter|business plan|titles?\b|thumbnail|hashtag|keyword|\bseo\b|vidiq|youtube intel/i.test(request)) return undefined; // not a film-pipeline request
+  if (
+    /web ?site|landing page|web ?page|\bsite\b|html|blog|article|e-?mail|newsletter|business plan|titles?\b|thumbnail|hashtag|keyword|\bseo\b|vidiq|youtube intel/i.test(
+      request,
+    )
+  )
+    return undefined; // not a film-pipeline request
   if (!p || !/make|create|produce|build|write|render|generate|all the way|script|storyboard|voice/i.test(request)) return undefined;
   // Stages are sequential: never skip past one that failed (e.g. no assets from an empty script).
   const st = STAGES.find(([, re, ok]) => re.test(request) && !ok(p));
@@ -53,90 +104,474 @@ export function state(p?: Project) {
 }
 
 type Tool = { desc: string; req?: string[]; run: (c: Conv, a: Record<string, unknown>, emit: (o: unknown) => void) => Promise<string> };
-const shotAt = (p: Project, a: Record<string, unknown>) => { const all = shots(p); const n = Number(a.shot ?? a.index ?? 1); const s = all[Math.max(0, n - 1)]; if (!s) throw new Error(`No shot ${n} (there are ${all.length})`); return s; };
+const shotAt = (p: Project, a: Record<string, unknown>) => {
+  const all = shots(p);
+  const n = Number(a.shot ?? a.index ?? 1);
+  const s = all[Math.max(0, n - 1)];
+  if (!s) throw new Error(`No shot ${n} (there are ${all.length})`);
+  return s;
+};
 export const TOOLS: Record<string, Tool> = {
-  list_projects: { desc: "{} — list existing projects", run: async (c) => db.listProjects(c.ownerId === "admin" ? undefined : c.ownerId).slice(0, 10).map((p) => `${p.id}: ${p.title} (${p.mode}, ${p.format})`).join("\n") || "none" },
-  open_project: { req: ["projectId"], desc: '{"projectId"} — switch to an existing project', run: async (c, a) => { const p = db.getProject(String(a.projectId)); if (!p || !owns(c, p)) throw new Error("not found"); c.projectId = p.id; return state(p); } },
-  create_project: { req: ["title","mode","format"], desc: '{"title","mode":"drama|documentary|ad","format":"yt_shorts|tiktok|fb_reels|yt_long","aspect":"9:16|16:9|1:1|4:5","style":"realistic|pixar|cartoon|anime","filmStyle":"blockbuster|martial_comedy|commando|war_epic|kdrama_romcom|epic_fantasy|prison_break|nollywood (only if the user named a genre)","outputType":"image|video","voiceMode":"dialogue|narration (from the user\'s request; ask if unclear and it matters)","idea"}', run: async (c, a, emit) => {
-    const { createProject } = await import("./projects"); const p = await createProject(a, c.ownerId || "admin"); c.projectId = p.id;
-    if (a.voiceMode === "dialogue" || a.voiceMode === "narration") await db.update(p.id, (q) => { q.voiceMode = a.voiceMode as "dialogue" | "narration"; }); emit({ type: "project", id: p.id, title: p.title }); return state(p); } },
-  set_film_style: { req: ["filmStyle"], desc: '{"filmStyle":"blockbuster|martial_comedy|commando|war_epic|kdrama_romcom|epic_fantasy|prison_break|nollywood"} — lock the project\'s film style (genre skill: script beats, shot grammar, look, music, review)', run: async (c, a) => {
-    const { isGenre, GENRES } = await import("./genres"); const id = String(a.filmStyle); if (!isGenre(id)) throw new Error("unknown film style");
-    const p = proj(c); const { buildBible } = await import("./studio");
-    const n = await db.update(p.id, (x) => { x.filmStyle = id; x.filmStyleManual = true; if (x.music !== "none") x.music = GENRES[id].music; x.bible = buildBible(x); }); return state(n); } },
-  brainstorm: { req: ["message"], desc: '{"message"} — brainstorm story/ad ideas in the project (returns idea cards)', run: async (c, a) => {
-    const p = proj(c); const rd = brainstormStream(p, String(a.message || p.idea || p.title)).getReader(); const dec = new TextDecoder(); let buf = "", done: { message?: { content: string; ideas?: Idea[] } } = {};
-    for (;;) { const { value, done: d } = await rd.read(); if (d) break; buf += dec.decode(value); }
-    for (const l of buf.split("\n")) { try { const o = JSON.parse(l); if (o.type === "done") done = o; if (o.type === "error") throw new Error(o.error); } catch (e) { if ((e as Error).message && !(e instanceof SyntaxError)) throw e; } }
-    c.lastIdeas = done.message?.ideas || [];
-    return c.lastIdeas.length ? c.lastIdeas.map((i, k) => `${k + 1}. ${i.title} — ${i.logline}`).join("\n") : (done.message?.content || "").slice(0, 800); } },
-  use_idea: { desc: '{"index":1} — set one brainstormed idea as the project idea', run: async (c, a) => { const p = proj(c); let i = c.lastIdeas[Number(a.index || 1) - 1];
-    if (!i) { const last = [...p.brainstorm].reverse().find((m) => m.role === "assistant" && m.kind !== "note"); if (!last) throw new Error("No ideas yet — brainstorm first"); i = last.ideas?.[0] || { title: p.title, logline: last.content.replace(/\s+/g, " ").slice(0, 600), hook: "", beats: [], characters: [] } as Idea; } await act(p.id, { action: "useIdea", idea: i }); return `Idea set: ${i.title}`; } },
-  write_script: { desc: '{"instruction"} — write the full script, or revise it per the instruction', run: async (c, a) => { const p = proj(c); await act(p.id, { action: "writeScript", prompt: String(a.instruction || "") }); const q = db.getProject(p.id)!; return `Script ${q.script.split(/\s+/).length} words. Opening: ${q.script.slice(0, 300)}`; } },
-  extract_assets: { desc: "{} — extract characters/locations/props from the script", run: async (c) => { const p = proj(c); await act(p.id, { action: "extractAssets" }); return db.getProject(p.id)!.assets.map((x) => `${x.kind}: ${x.name}`).join(", "); } },
-  generate_asset_images: { desc: "{} — generate reference images for every asset", run: async (c) => { const p = proj(c); await act(p.id, { action: "autocreateAssets" }); return state(db.getProject(p.id)); } },
-  build_storyboard: { desc: "{} — split the script into scenes and shots", run: async (c) => { const p = proj(c); await act(p.id, { action: "buildStoryboard" }); const q = db.getProject(p.id)!; return `${q.scenes.length} scenes, ${shots(q).length} shots:\n` + shots(q).slice(0, 12).map((s, i) => `${i + 1}. ${s.description.slice(0, 90)}`).join("\n"); } },
-  generate_frames: { desc: '{"limit":50} — generate start frames for shots that have none', run: async (c, a) => { const p = proj(c); await act(p.id, { action: "autofillFrames", limit: Number(a.limit) || 50 }); return state(db.getProject(p.id)); } },
-  edit_shot: { req: ["shot","prompt"], desc: '{"shot":1,"prompt"} — regenerate shot N\'s frame with a change', run: async (c, a) => { const p = proj(c); const s = shotAt(p, a); await act(p.id, { action: "frame", shotId: s.id, which: "start", prompt: String(a.prompt || "") }); return `Shot ${a.shot} regenerated with "${a.prompt}"`; } },
-  continuity_check: { desc: "{} — check continuity across all shots", run: async (c) => { const p = proj(c); const r = await act(p.id, { action: "continuityAll" }); return JSON.stringify(r.result ?? r).slice(0, 900); } },
-  fix_continuity: { req: ["shot"], desc: '{"shot":1} — auto-fix continuity on shot N', run: async (c, a) => { const p = proj(c); const s = shotAt(p, a); const r = await act(p.id, { action: "fixContinuity", shotId: s.id }); return JSON.stringify(r.result ?? r).slice(0, 400); } },
-  voiceover: { desc: "{} — generate voiceover for every shot", run: async (c) => { const p = proj(c); await act(p.id, { action: "voiceAll" }); return state(db.getProject(p.id)); } },
-  render_video: { desc: "{} — assemble and render the final video (waits until done)", run: async (c, _a, emit) => {
-    const p = proj(c); await act(p.id, { action: "render" });
-    for (let i = 0; i < 400; i++) { await new Promise((r) => setTimeout(r, 3000)); const q = db.getProject(p.id)!; if (i % 5 === 0) emit({ type: "status", text: `Rendering… ${Math.round(q.render.progress || 0)}% ${q.render.message || ""}` }); if (q.render.status === "done" || q.render.status === "error") return `Render ${q.render.status}: ${q.render.message} ${q.render.url || ""}`; if (c.abort) return "Render continues in background"; }
-    return "Render still running in the background"; } },
-  edit_video: { req: ["prompt"], desc: '{"prompt"} — apply an edit command (music, subtitles, pacing, voice…)', run: async (c, a) => { const p = proj(c); const r = await act(p.id, { action: "aiEdit", prompt: String(a.prompt || "") }); return JSON.stringify(r.result ?? r).slice(0, 500); } },
-  research: { req: ["task","goal"], desc: '{"task":"trending|analyse|watch|custom","goal","url"?,"maxSteps":8} — run the virtual-desktop browser agent (YouTube research, watching videos); notes are saved to the open project', run: async (c, a, emit) => {
-    const task = (["trending", "analyse", "watch", "custom"].includes(String(a.task)) ? a.task : "custom") as Task;
-    const s = startResearch({ goal: String(a.goal || a.url || "research"), task, url: a.url ? String(a.url) : undefined, projectId: c.projectId, maxSteps: Number(a.maxSteps) || 8, ownerId: c.ownerId, workspace: c.id.includes("~") ? c.id.split("~")[0] : "main" }); // this agent's own desktop
-    c.researchId = s.id; emit({ type: "session", id: s.id }); let seen = 0;
-    while (s.status === "running" || s.status === "paused") {
-      await new Promise((r) => setTimeout(r, 1500));
-      for (const st of s.steps.slice(seen)) if (st.kind === "act" || st.kind === "note") emit({ type: "status", text: `🖥 ${st.action}` }); seen = s.steps.length;
-    }
-    const x = getSession(s.id)!;
-    return `status ${x.status}${x.error ? " " + x.error : ""}. Videos seen: ${x.trending.slice(0, 8).map((v: { title: string; channel: string; views?: string }) => `${v.title} (${v.channel}, ${v.views || "?"})`).join("; ")}\nNOTES:\n${x.notes.slice(0, 2500)}`; } },
-  extract_keywords: { req: ["input"], desc: '{"input": YouTube link or seed keyword} — tags, hashtags, autocomplete suggestions, ranked into primary/long-tail/trending keywords', run: async (_c, a) => { const r = await keywordReport(String(a.input)); return `Video: ${r.raw.video?.title || "-"} | tags: ${r.raw.tags.slice(0, 15).join(", ") || "none"}\nPRIMARY: ${r.report.primary.join(", ")}\nLONG-TAIL: ${r.report.longTail.join(", ")}\nTRENDING: ${r.report.trending.join(", ")}\nHASHTAGS: ${r.report.hashtags.join(" ")}\n${r.report.summary || ""}`; } },
-  get_youtube_script: { req: ["url"], desc: '{"url", "use_as_script": false} — ALREADY returns the full timestamped transcript (no research needed after it) + hook/beats/CTA analysis; use_as_script=true writes an ORIGINAL rewritten script into the open project', run: async (c, a) => {
-    const r = await scriptReport(String(a.url)); if (!r.segs.length) return `No transcript available for "${r.video.title}" (${r.via}).`;
-    let extra = ""; if (a.use_as_script && c.projectId) { const w = await rewriteAsScript(r); await db.update(c.projectId, (x) => { x.script = w.script; }); extra = `\nWrote an original script into the project (${w.script.split(/\s+/).length} words).`; }
-    return `"${r.video.title}" — ${r.video.channel} · ${r.segs.length} caption lines via ${r.via}\nHOOK: ${r.analysis?.hook || "-"}\nBEATS: ${(r.analysis?.beats || []).map((b) => `${b.t || ""} ${b.beat}`).join(" | ")}\nCTA: ${r.analysis?.cta || "-"}\nTRANSCRIPT: ${r.segs.slice(0, 60).map((s) => `[${stamp(s.t)}] ${s.text}`).join(" ").slice(0, 1800)}${extra}`; } },
+  list_projects: {
+    desc: "{} — list existing projects",
+    run: async (c) =>
+      db
+        .listProjects(c.ownerId === "admin" ? undefined : c.ownerId)
+        .slice(0, 10)
+        .map((p) => `${p.id}: ${p.title} (${p.mode}, ${p.format})`)
+        .join("\n") || "none",
+  },
+  open_project: {
+    req: ["projectId"],
+    desc: '{"projectId"} — switch to an existing project',
+    run: async (c, a) => {
+      const p = db.getProject(String(a.projectId));
+      if (!p || !owns(c, p)) throw new Error("not found");
+      c.projectId = p.id;
+      return state(p);
+    },
+  },
+  create_project: {
+    req: ["title", "mode", "format"],
+    desc: '{"title","mode":"drama|documentary|ad","format":"yt_shorts|tiktok|fb_reels|yt_long","aspect":"9:16|16:9|1:1|4:5","style":"realistic|pixar|cartoon|anime","filmStyle":"blockbuster|martial_comedy|commando|war_epic|kdrama_romcom|epic_fantasy|prison_break|nollywood (only if the user named a genre)","outputType":"image|video","voiceMode":"dialogue|narration (from the user\'s request; ask if unclear and it matters)","idea"}',
+    run: async (c, a, emit) => {
+      const { createProject } = await import("./projects");
+      const p = await createProject(a, c.ownerId || "admin");
+      c.projectId = p.id;
+      if (a.voiceMode === "dialogue" || a.voiceMode === "narration")
+        await db.update(p.id, (q) => {
+          q.voiceMode = a.voiceMode as "dialogue" | "narration";
+        });
+      emit({ type: "project", id: p.id, title: p.title });
+      return state(p);
+    },
+  },
+  set_film_style: {
+    req: ["filmStyle"],
+    desc: '{"filmStyle":"blockbuster|martial_comedy|commando|war_epic|kdrama_romcom|epic_fantasy|prison_break|nollywood"} — lock the project\'s film style (genre skill: script beats, shot grammar, look, music, review)',
+    run: async (c, a) => {
+      const { isGenre, GENRES } = await import("./genres");
+      const id = String(a.filmStyle);
+      if (!isGenre(id)) throw new Error("unknown film style");
+      const p = proj(c);
+      const { buildBible } = await import("./studio");
+      const n = await db.update(p.id, (x) => {
+        x.filmStyle = id;
+        x.filmStyleManual = true;
+        if (x.music !== "none") x.music = GENRES[id].music;
+        x.bible = buildBible(x);
+      });
+      return state(n);
+    },
+  },
+  brainstorm: {
+    req: ["message"],
+    desc: '{"message"} — brainstorm story/ad ideas in the project (returns idea cards)',
+    run: async (c, a) => {
+      const p = proj(c);
+      const rd = brainstormStream(p, String(a.message || p.idea || p.title)).getReader();
+      const dec = new TextDecoder();
+      let buf = "",
+        done: { message?: { content: string; ideas?: Idea[] } } = {};
+      for (;;) {
+        const { value, done: d } = await rd.read();
+        if (d) break;
+        buf += dec.decode(value);
+      }
+      for (const l of buf.split("\n")) {
+        try {
+          const o = JSON.parse(l);
+          if (o.type === "done") done = o;
+          if (o.type === "error") throw new Error(o.error);
+        } catch (e) {
+          if ((e as Error).message && !(e instanceof SyntaxError)) throw e;
+        }
+      }
+      c.lastIdeas = done.message?.ideas || [];
+      return c.lastIdeas.length ? c.lastIdeas.map((i, k) => `${k + 1}. ${i.title} — ${i.logline}`).join("\n") : (done.message?.content || "").slice(0, 800);
+    },
+  },
+  use_idea: {
+    desc: '{"index":1} — set one brainstormed idea as the project idea',
+    run: async (c, a) => {
+      const p = proj(c);
+      let i = c.lastIdeas[Number(a.index || 1) - 1];
+      if (!i) {
+        const last = [...p.brainstorm].reverse().find((m) => m.role === "assistant" && m.kind !== "note");
+        if (!last) throw new Error("No ideas yet — brainstorm first");
+        i = last.ideas?.[0] || ({ title: p.title, logline: last.content.replace(/\s+/g, " ").slice(0, 600), hook: "", beats: [], characters: [] } as Idea);
+      }
+      await act(p.id, { action: "useIdea", idea: i });
+      return `Idea set: ${i.title}`;
+    },
+  },
+  write_script: {
+    desc: '{"instruction"} — write the full script, or revise it per the instruction',
+    run: async (c, a) => {
+      const p = proj(c);
+      await act(p.id, { action: "writeScript", prompt: String(a.instruction || "") });
+      const q = db.getProject(p.id)!;
+      return `Script ${q.script.split(/\s+/).length} words. Opening: ${q.script.slice(0, 300)}`;
+    },
+  },
+  extract_assets: {
+    desc: "{} — extract characters/locations/props from the script",
+    run: async (c) => {
+      const p = proj(c);
+      await act(p.id, { action: "extractAssets" });
+      return db
+        .getProject(p.id)!
+        .assets.map((x) => `${x.kind}: ${x.name}`)
+        .join(", ");
+    },
+  },
+  generate_asset_images: {
+    desc: "{} — generate reference images for every asset",
+    run: async (c) => {
+      const p = proj(c);
+      await act(p.id, { action: "autocreateAssets" });
+      return state(db.getProject(p.id));
+    },
+  },
+  build_storyboard: {
+    desc: "{} — split the script into scenes and shots",
+    run: async (c) => {
+      const p = proj(c);
+      await act(p.id, { action: "buildStoryboard" });
+      const q = db.getProject(p.id)!;
+      return (
+        `${q.scenes.length} scenes, ${shots(q).length} shots:\n` +
+        shots(q)
+          .slice(0, 12)
+          .map((s, i) => `${i + 1}. ${s.description.slice(0, 90)}`)
+          .join("\n")
+      );
+    },
+  },
+  generate_frames: {
+    desc: '{"limit":50} — generate start frames for shots that have none',
+    run: async (c, a) => {
+      const p = proj(c);
+      await act(p.id, { action: "autofillFrames", limit: Number(a.limit) || 50 });
+      return state(db.getProject(p.id));
+    },
+  },
+  edit_shot: {
+    req: ["shot", "prompt"],
+    desc: '{"shot":1,"prompt"} — regenerate shot N\'s frame with a change',
+    run: async (c, a) => {
+      const p = proj(c);
+      const s = shotAt(p, a);
+      await act(p.id, { action: "frame", shotId: s.id, which: "start", prompt: String(a.prompt || "") });
+      return `Shot ${a.shot} regenerated with "${a.prompt}"`;
+    },
+  },
+  continuity_check: {
+    desc: "{} — check continuity across all shots",
+    run: async (c) => {
+      const p = proj(c);
+      const r = await act(p.id, { action: "continuityAll" });
+      return JSON.stringify(r.result ?? r).slice(0, 900);
+    },
+  },
+  fix_continuity: {
+    req: ["shot"],
+    desc: '{"shot":1} — auto-fix continuity on shot N',
+    run: async (c, a) => {
+      const p = proj(c);
+      const s = shotAt(p, a);
+      const r = await act(p.id, { action: "fixContinuity", shotId: s.id });
+      return JSON.stringify(r.result ?? r).slice(0, 400);
+    },
+  },
+  voiceover: {
+    desc: "{} — generate voiceover for every shot",
+    run: async (c) => {
+      const p = proj(c);
+      await act(p.id, { action: "voiceAll" });
+      return state(db.getProject(p.id));
+    },
+  },
+  render_video: {
+    desc: "{} — assemble and render the final video (waits until done)",
+    run: async (c, _a, emit) => {
+      const p = proj(c);
+      await act(p.id, { action: "render" });
+      for (let i = 0; i < 400; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const q = db.getProject(p.id)!;
+        if (i % 5 === 0) emit({ type: "status", text: `Rendering… ${Math.round(q.render.progress || 0)}% ${q.render.message || ""}` });
+        if (q.render.status === "done" || q.render.status === "error") return `Render ${q.render.status}: ${q.render.message} ${q.render.url || ""}`;
+        if (c.abort) return "Render continues in background";
+      }
+      return "Render still running in the background";
+    },
+  },
+  edit_video: {
+    req: ["prompt"],
+    desc: '{"prompt"} — apply an edit command (music, subtitles, pacing, voice…)',
+    run: async (c, a) => {
+      const p = proj(c);
+      const r = await act(p.id, { action: "aiEdit", prompt: String(a.prompt || "") });
+      return JSON.stringify(r.result ?? r).slice(0, 500);
+    },
+  },
+  research: {
+    req: ["task", "goal"],
+    desc: '{"task":"trending|analyse|watch|custom","goal","url"?,"maxSteps":8} — run the virtual-desktop browser agent (YouTube research, watching videos); notes are saved to the open project',
+    run: async (c, a, emit) => {
+      const task = (["trending", "analyse", "watch", "custom"].includes(String(a.task)) ? a.task : "custom") as Task;
+      const s = startResearch({
+        goal: String(a.goal || a.url || "research"),
+        task,
+        url: a.url ? String(a.url) : undefined,
+        projectId: c.projectId,
+        maxSteps: Number(a.maxSteps) || 8,
+        ownerId: c.ownerId,
+        workspace: c.id.includes("~") ? c.id.split("~")[0] : "main",
+      }); // this agent's own desktop
+      c.researchId = s.id;
+      emit({ type: "session", id: s.id });
+      let seen = 0;
+      while (s.status === "running" || s.status === "paused") {
+        await new Promise((r) => setTimeout(r, 1500));
+        for (const st of s.steps.slice(seen)) if (st.kind === "act" || st.kind === "note") emit({ type: "status", text: `🖥 ${st.action}` });
+        seen = s.steps.length;
+      }
+      const x = getSession(s.id)!;
+      return `status ${x.status}${x.error ? " " + x.error : ""}. Videos seen: ${x.trending
+        .slice(0, 8)
+        .map((v: { title: string; channel: string; views?: string }) => `${v.title} (${v.channel}, ${v.views || "?"})`)
+        .join("; ")}\nNOTES:\n${x.notes.slice(0, 2500)}`;
+    },
+  },
+  extract_keywords: {
+    req: ["input"],
+    desc: '{"input": YouTube link or seed keyword} — tags, hashtags, autocomplete suggestions, ranked into primary/long-tail/trending keywords',
+    run: async (_c, a) => {
+      const r = await keywordReport(String(a.input));
+      return `Video: ${r.raw.video?.title || "-"} | tags: ${r.raw.tags.slice(0, 15).join(", ") || "none"}\nPRIMARY: ${r.report.primary.join(", ")}\nLONG-TAIL: ${r.report.longTail.join(", ")}\nTRENDING: ${r.report.trending.join(", ")}\nHASHTAGS: ${r.report.hashtags.join(" ")}\n${r.report.summary || ""}`;
+    },
+  },
+  get_youtube_script: {
+    req: ["url"],
+    desc: '{"url", "use_as_script": false} — ALREADY returns the full timestamped transcript (no research needed after it) + hook/beats/CTA analysis; use_as_script=true writes an ORIGINAL rewritten script into the open project',
+    run: async (c, a) => {
+      const r = await scriptReport(String(a.url));
+      if (!r.segs.length) return `No transcript available for "${r.video.title}" (${r.via}).`;
+      let extra = "";
+      if (a.use_as_script && c.projectId) {
+        const w = await rewriteAsScript(r);
+        await db.update(c.projectId, (x) => {
+          x.script = w.script;
+        });
+        extra = `\nWrote an original script into the project (${w.script.split(/\s+/).length} words).`;
+      }
+      return `"${r.video.title}" — ${r.video.channel} · ${r.segs.length} caption lines via ${r.via}\nHOOK: ${r.analysis?.hook || "-"}\nBEATS: ${(r.analysis?.beats || []).map((b) => `${b.t || ""} ${b.beat}`).join(" | ")}\nCTA: ${r.analysis?.cta || "-"}\nTRANSCRIPT: ${r.segs
+        .slice(0, 60)
+        .map((s) => `[${stamp(s.t)}] ${s.text}`)
+        .join(" ")
+        .slice(0, 1800)}${extra}`;
+    },
+  },
   project_status: { desc: "{} — current project state", run: async (c) => state(proj(c)) },
-  compose_scene: { desc: '{"shots":"all|1,3","note"} — Muse Spark picks a HyperFrames motion template + slot values (JSON only) for shots', run: async (c, a) => { const p = proj(c); const ids = pickShots(p, a.shots); const r = await act(p.id, { action: "composeScenes", shotIds: ids, note: a.note || "" }) as { count?: number }; const q = db.getProject(p.id)!; return `Motion designed for ${r?.count ?? "?"} shots: ` + q.scenes.flatMap((s) => s.shots).slice(0, 8).map((s, i) => `${i + 1}:${s.motionSpec?.template || "-"}`).join(" "); } },
-  animate_shot: { desc: '{"shots":"all|1,3"} — animate shots with HyperFrames now (one at a time, cached; FFmpeg fallback). Run after voiceover so lengths match', run: async (c, a) => { const p = proj(c); const r = await act(p.id, { action: "animateShots", shotIds: pickShots(p, a.shots) }) as { animated: number; fallback: number }; return `Animated ${r.animated} shots with HyperFrames${r.fallback ? `, ${r.fallback} will use FFmpeg motion` : ""}`; } },
-  set_voice_mode: { req: ["voiceMode"], desc: '{"voiceMode":"dialogue|narration"} — tell the story through character dialogue or a narrator voice-over (set before write_script; rewrite the script after changing it)', run: async (c, a) => { const p = proj(c); const v = a.voiceMode === "narration" ? "narration" : "dialogue"; await db.update(p.id, (q) => { q.voiceMode = v; }); return `Voice mode: ${v}`; } },
-  web_search: { req: ["query"], desc: '{"query"} — fast web research (search engine + reads the top pages) and returns a sourced summary; use for facts, news, competitors, docs. Use research instead only when you must click around on the virtual desktop', run: async (_c, a, emit) => { const { webSearch } = await import("./webtools"); return webSearch(String(a.query), (t) => emit({ type: "status", text: t })); } },
-  youtube_intel: { req: ["topic"], desc: '{"topic","format":"long|shorts|any","minutes"?} — vidIQ-style YouTube Intelligence: studies top competing channels/videos (views, views/hour, outlier score, tags, upload timing) and writes 10 ranked titles, a retention script, 3 thumbnail concepts, hashtags, scored keywords and a description. If a project is open its YouTube title/description/tags are filled in', run: async (c, a, emit) => {
-    const { startReport, waitReport, reportText } = await import("./ytintel"); const owner = c.ownerId || "admin";
-    const r0 = startReport({ ownerId: owner, topic: String(a.topic), format: (["long", "shorts", "any"].includes(String(a.format)) ? a.format : "any") as "any", minutes: Number(a.minutes) || undefined, projectId: c.projectId });
-    emit({ type: "ytintel", id: r0.id }); let seen = 0, r = r0;
-    for (let i = 0; i < 300 && !c.abort; i++) { await new Promise((x) => setTimeout(x, 2000)); const x = (await import("./ytintel")).getReport(owner, r0.id); if (!x) break; r = x; for (const s of x.steps.slice(seen)) emit({ type: "status", text: s.text }); seen = x.steps.length; if (x.status !== "running") break; }
-    if (r.status === "done" && c.projectId) { const t = r.titles?.[0]?.title; await db.update(c.projectId, (x) => { x.yt = { reportId: r.id, title: t || r.topic, description: r.description || "", tags: (r.keywords || []).slice(0, 15).map((k) => k.keyword), hashtags: r.hashtags || [] }; }); }
-    void waitReport; return reportText(r) + (r.status === "done" && c.projectId ? "\n(Filled the open project's YouTube title, description and tags.)" : ""); } },
-  write_document: { req: ["instruction"], desc: '{"instruction","kind":"article|email|blog|social|outline|business plan|code|other","title"?} — write any long-form text (not a film script) and save it as a document in this agent\'s workspace', run: async (c, a, emit) => { const { writeDoc } = await import("./webtools"); return writeDoc({ ownerId: c.ownerId || "admin", workspace: wsOf(c), instruction: String(a.instruction), kind: String(a.kind || "other"), title: a.title ? String(a.title) : undefined, context: c.turns.filter((t) => t.role === "tool").slice(-3).map((t) => t.content.slice(0, 1500)).join("\n---\n") }, (t) => emit({ type: "status", text: t })); } },
-  build_website: { req: ["prompt"], desc: '{"prompt","name"?,"siteId"?} — build (or with siteId, revise) a simple static website: Muse Spark writes the HTML/CSS/JS, Muse Image paints the hero. Opens a live preview on this agent\'s computer and returns preview + zip links', run: async (c, a, emit) => {
-    const { buildSite, previewUrl } = await import("./sites"); const owner = c.ownerId || "admin";
-    const s = await buildSite({ ownerId: owner, workspace: wsOf(c), prompt: String(a.prompt), name: a.name ? String(a.name) : undefined, siteId: a.siteId ? String(a.siteId) : c.siteId, step: (t) => emit({ type: "status", text: t }) });
-    c.siteId = s.id; const url = previewUrl(s); emit({ type: "site", id: s.id, name: s.name, preview: url, zip: `/api/sites/${s.id}/zip`, live: s.published ? `/p/${s.published}/` : undefined });
-    let onDesk = "";
-    try { const { claimDesk } = await import("./deskLease"); const ok = (await claimDesk(owner, false, wsOf(c))).ok; if (ok) { const { deskContext } = await import("./desk"); const ctx = await deskContext(); if (ctx) { const pg = ctx.pages().find((p) => p.url().includes(`/s/${s.id}-`)) || await ctx.newPage(); await pg.goto("http://127.0.0.1:3000" + url, { timeout: 20000 }); await pg.bringToFront(); onDesk = " Opened the live preview in the browser on my computer."; } } } catch { /* desk busy/down */ }
-    return `Website "${s.name}" (site ${s.id}, version ${s.versions}) built with ${s.provider}. Preview: ${url} · Download zip: /api/sites/${s.id}/zip${s.published ? ` · Live at /p/${s.published}/` : ""}.${onDesk} To change it call build_website again with siteId ${s.id}; to put it online call publish_website.`; } },
-  publish_website: { desc: '{"siteId"?} — publish the website publicly at /p/<user>/<site>/ (only when the user asks to publish/put it online)', run: async (c, a) => { const { publishSite, userSlug, getSite } = await import("./sites"); const id = String(a.siteId || c.siteId || ""); const s = getSite(id); if (!s) throw new Error("No website yet — build_website first"); const u = db.getUser(c.ownerId || ""); const url = publishSite(s.ownerId, id, userSlug(s.ownerId, u?.email || "user@x", u?.name)); return `Published at ${url}`; } },
-  remember_note: { req: ["note"], desc: '{"note"} — save a short memory note for yourself (preferences, decisions) that you will see in future chats', run: async (c, a) => { if (!c.persona?.onNote) return "no memory here"; await c.persona.onNote(String(a.note).slice(0, 300)); return "saved"; } },
+  compose_scene: {
+    desc: '{"shots":"all|1,3","note"} — Muse Spark picks a HyperFrames motion template + slot values (JSON only) for shots',
+    run: async (c, a) => {
+      const p = proj(c);
+      const ids = pickShots(p, a.shots);
+      const r = (await act(p.id, { action: "composeScenes", shotIds: ids, note: a.note || "" })) as { count?: number };
+      const q = db.getProject(p.id)!;
+      return (
+        `Motion designed for ${r?.count ?? "?"} shots: ` +
+        q.scenes
+          .flatMap((s) => s.shots)
+          .slice(0, 8)
+          .map((s, i) => `${i + 1}:${s.motionSpec?.template || "-"}`)
+          .join(" ")
+      );
+    },
+  },
+  animate_shot: {
+    desc: '{"shots":"all|1,3"} — animate shots with HyperFrames now (one at a time, cached; FFmpeg fallback). Run after voiceover so lengths match',
+    run: async (c, a) => {
+      const p = proj(c);
+      const r = (await act(p.id, { action: "animateShots", shotIds: pickShots(p, a.shots) })) as { animated: number; fallback: number };
+      return `Animated ${r.animated} shots with HyperFrames${r.fallback ? `, ${r.fallback} will use FFmpeg motion` : ""}`;
+    },
+  },
+  set_voice_mode: {
+    req: ["voiceMode"],
+    desc: '{"voiceMode":"dialogue|narration"} — tell the story through character dialogue or a narrator voice-over (set before write_script; rewrite the script after changing it)',
+    run: async (c, a) => {
+      const p = proj(c);
+      const v = a.voiceMode === "narration" ? "narration" : "dialogue";
+      await db.update(p.id, (q) => {
+        q.voiceMode = v;
+      });
+      return `Voice mode: ${v}`;
+    },
+  },
+  web_search: {
+    req: ["query"],
+    desc: '{"query"} — fast web research (search engine + reads the top pages) and returns a sourced summary; use for facts, news, competitors, docs. Use research instead only when you must click around on the virtual desktop',
+    run: async (_c, a, emit) => {
+      const { webSearch } = await import("./webtools");
+      return webSearch(String(a.query), (t) => emit({ type: "status", text: t }));
+    },
+  },
+  youtube_intel: {
+    req: ["topic"],
+    desc: '{"topic","format":"long|shorts|any","minutes"?} — vidIQ-style YouTube Intelligence: studies top competing channels/videos (views, views/hour, outlier score, tags, upload timing) and writes 10 ranked titles, a retention script, 3 thumbnail concepts, hashtags, scored keywords and a description. If a project is open its YouTube title/description/tags are filled in',
+    run: async (c, a, emit) => {
+      const { startReport, waitReport, reportText } = await import("./ytintel");
+      const owner = c.ownerId || "admin";
+      const r0 = startReport({
+        ownerId: owner,
+        topic: String(a.topic),
+        format: (["long", "shorts", "any"].includes(String(a.format)) ? a.format : "any") as "any",
+        minutes: Number(a.minutes) || undefined,
+        projectId: c.projectId,
+      });
+      emit({ type: "ytintel", id: r0.id });
+      let seen = 0,
+        r = r0;
+      for (let i = 0; i < 300 && !c.abort; i++) {
+        await new Promise((x) => setTimeout(x, 2000));
+        const x = (await import("./ytintel")).getReport(owner, r0.id);
+        if (!x) break;
+        r = x;
+        for (const s of x.steps.slice(seen)) emit({ type: "status", text: s.text });
+        seen = x.steps.length;
+        if (x.status !== "running") break;
+      }
+      if (r.status === "done" && c.projectId) {
+        const t = r.titles?.[0]?.title;
+        await db.update(c.projectId, (x) => {
+          x.yt = {
+            reportId: r.id,
+            title: t || r.topic,
+            description: r.description || "",
+            tags: (r.keywords || []).slice(0, 15).map((k) => k.keyword),
+            hashtags: r.hashtags || [],
+          };
+        });
+      }
+      void waitReport;
+      return reportText(r) + (r.status === "done" && c.projectId ? "\n(Filled the open project's YouTube title, description and tags.)" : "");
+    },
+  },
+  write_document: {
+    req: ["instruction"],
+    desc: '{"instruction","kind":"article|email|blog|social|outline|business plan|code|other","title"?} — write any long-form text (not a film script) and save it as a document in this agent\'s workspace',
+    run: async (c, a, emit) => {
+      const { writeDoc } = await import("./webtools");
+      return writeDoc(
+        {
+          ownerId: c.ownerId || "admin",
+          workspace: wsOf(c),
+          instruction: String(a.instruction),
+          kind: String(a.kind || "other"),
+          title: a.title ? String(a.title) : undefined,
+          context: c.turns
+            .filter((t) => t.role === "tool")
+            .slice(-3)
+            .map((t) => t.content.slice(0, 1500))
+            .join("\n---\n"),
+        },
+        (t) => emit({ type: "status", text: t }),
+      );
+    },
+  },
+  build_website: {
+    req: ["prompt"],
+    desc: '{"prompt","name"?,"siteId"?} — build (or with siteId, revise) a simple static website: Muse Spark writes the HTML/CSS/JS, Muse Image paints the hero. Opens a live preview on this agent\'s computer and returns preview + zip links',
+    run: async (c, a, emit) => {
+      const { buildSite, previewUrl } = await import("./sites");
+      const owner = c.ownerId || "admin";
+      const s = await buildSite({
+        ownerId: owner,
+        workspace: wsOf(c),
+        prompt: String(a.prompt),
+        name: a.name ? String(a.name) : undefined,
+        siteId: a.siteId ? String(a.siteId) : c.siteId,
+        step: (t) => emit({ type: "status", text: t }),
+      });
+      c.siteId = s.id;
+      const url = previewUrl(s);
+      emit({ type: "site", id: s.id, name: s.name, preview: url, zip: `/api/sites/${s.id}/zip`, live: s.published ? `/p/${s.published}/` : undefined });
+      let onDesk = "";
+      try {
+        const { claimDesk } = await import("./deskLease");
+        const ok = (await claimDesk(owner, false, wsOf(c))).ok;
+        if (ok) {
+          const { deskContext } = await import("./desk");
+          const ctx = await deskContext();
+          if (ctx) {
+            const pg = ctx.pages().find((p) => p.url().includes(`/s/${s.id}-`)) || (await ctx.newPage());
+            await pg.goto("http://127.0.0.1:3000" + url, { timeout: 20000 });
+            await pg.bringToFront();
+            onDesk = " Opened the live preview in the browser on my computer.";
+          }
+        }
+      } catch {
+        /* desk busy/down */
+      }
+      return `Website "${s.name}" (site ${s.id}, version ${s.versions}) built with ${s.provider}. Preview: ${url} · Download zip: /api/sites/${s.id}/zip${s.published ? ` · Live at /p/${s.published}/` : ""}.${onDesk} To change it call build_website again with siteId ${s.id}; to put it online call publish_website.`;
+    },
+  },
+  publish_website: {
+    desc: '{"siteId"?} — publish the website publicly at /p/<user>/<site>/ (only when the user asks to publish/put it online)',
+    run: async (c, a) => {
+      const { publishSite, userSlug, getSite } = await import("./sites");
+      const id = String(a.siteId || c.siteId || "");
+      const s = getSite(id);
+      if (!s) throw new Error("No website yet — build_website first");
+      const u = db.getUser(c.ownerId || "");
+      const url = publishSite(s.ownerId, id, userSlug(s.ownerId, u?.email || "user@x", u?.name));
+      return `Published at ${url}`;
+    },
+  },
+  remember_note: {
+    req: ["note"],
+    desc: '{"note"} — save a short memory note for yourself (preferences, decisions) that you will see in future chats',
+    run: async (c, a) => {
+      if (!c.persona?.onNote) return "no memory here";
+      await c.persona.onNote(String(a.note).slice(0, 300));
+      return "saved";
+    },
+  },
 };
 /** Tools that need the user's go-ahead when an agent is set to "ask at key points". */
-function pickShots(p: Project, v: unknown): string[] | undefined { const all = p.scenes.flatMap((s) => s.shots); if (!v || v === "all") return undefined; const ns = String(v).match(/\d+/g)?.map(Number) || []; const ids = ns.map((n) => all[n - 1]?.id).filter(Boolean) as string[]; return ids.length ? ids : undefined; }
+function pickShots(p: Project, v: unknown): string[] | undefined {
+  const all = p.scenes.flatMap((s) => s.shots);
+  if (!v || v === "all") return undefined;
+  const ns = String(v).match(/\d+/g)?.map(Number) || [];
+  const ids = ns.map((n) => all[n - 1]?.id).filter(Boolean) as string[];
+  return ids.length ? ids : undefined;
+}
 const KEY_STEPS = new Set(["build_storyboard", "generate_frames", "render_video"]);
 const APPROVED = /\b(approve[ds]?|go ahead|yes|continue|proceed|ok(ay)?|do it|looks good)\b/i;
 
 function system(c: Conv) {
   const p = c.projectId ? db.getProject(c.projectId) : undefined;
   const pe = c.persona;
-  const who = pe ? `You are ${pe.name}, one of the user's production agents inside ReelForge Studio (an AI movie studio).${pe.brief ? ` Your brief: ${pe.brief}.` : ""}${pe.filmStyle ? ` Default film style for new projects: ${pe.filmStyle} (pass it as filmStyle to create_project).` : ""}${pe.others ? ` Other agents in this chat: ${pe.others}. Only do your own part; don't repeat what they said.` : ""}${pe.notes?.length ? `\nYOUR MEMORY NOTES:\n${pe.notes.slice(-12).map((n) => "- " + n).join("\n")}` : ""}\nYou drive the whole ReelForge pipeline yourself through tools, exactly as a user would in the studio (the user may also edit the same project by hand — always re-read project_status). For a full film run every stage autonomously: create_project → research if the topic needs facts → write_script → extract_assets → generate_asset_images → build_storyboard → continuity_check/fix_continuity → generate_frames → voiceover (Meta MMS) → compose_scene → animate_shot → render_video, then give the export link. If the user asks for one step ("just do the voiceover"), do only that step. Dialogue vs narration: use what the user said; otherwise infer (documentary/explainer/story-told-by-a-narrator → narration; drama with characters talking → dialogue) and set voiceMode on create_project (or set_voice_mode); ask only if it is genuinely unclear.${pe.approval === "key" ? "\nThe user wants to approve key steps (storyboard, frames, render): the runtime pauses before them." : ""}\n` : "";
+  const who = pe
+    ? `You are ${pe.name}, one of the user's production agents inside ReelForge Studio (an AI movie studio).${pe.brief ? ` Your brief: ${pe.brief}.` : ""}${pe.filmStyle ? ` Default film style for new projects: ${pe.filmStyle} (pass it as filmStyle to create_project).` : ""}${pe.others ? ` Other agents in this chat: ${pe.others}. Only do your own part; don't repeat what they said.` : ""}${
+        pe.notes?.length
+          ? `\nYOUR MEMORY NOTES:\n${pe.notes
+              .slice(-12)
+              .map((n) => "- " + n)
+              .join("\n")}`
+          : ""
+      }\nYou drive the whole ReelForge pipeline yourself through tools, exactly as a user would in the studio (the user may also edit the same project by hand — always re-read project_status). For a full film run every stage autonomously: create_project → research if the topic needs facts → write_script → extract_assets → generate_asset_images → build_storyboard → continuity_check/fix_continuity → generate_frames → voiceover (Meta MMS) → compose_scene → animate_shot → render_video, then give the export link. If the user asks for one step ("just do the voiceover"), do only that step. Dialogue vs narration: use what the user said; otherwise infer (documentary/explainer/story-told-by-a-narrator → narration; drama with characters talking → dialogue) and set voiceMode on create_project (or set_voice_mode); ask only if it is genuinely unclear.${pe.approval === "key" ? "\nThe user wants to approve key steps (storyboard, frames, render): the runtime pauses before them." : ""}\n`
+    : "";
   return `${who}You are ${pe ? pe.name : "Reel"}, ${pe ? "working as" : "the ReelForge Studio assistant,"} the assistant inside an AI movie studio. You chat naturally AND get things done by calling tools. You are a general-purpose assistant, not only a film tool: besides the whole film pipeline (projects, brainstorm, scripts, assets, storyboards, frames, continuity, voice, render, edit) you can research the web (web_search; research for hands-on browsing on your virtual desktop), run YouTube Intelligence for titles/scripts/thumbnails/hashtags/keywords (youtube_intel), write any document (write_document), and build, revise and publish simple websites (build_website, publish_website). Pick whatever tools the request needs; a non-film request (e.g. 'build me a landing page', 'best title for my video', 'research X') must NOT create a film project.
 
 TOOLS (name args — purpose):
-${Object.entries(TOOLS).map(([k, t]) => `- ${k} ${t.desc}`).join("\n")}
+${Object.entries(TOOLS)
+  .map(([k, t]) => `- ${k} ${t.desc}`)
+  .join("\n")}
 
 HOW YOU WORK: you talk to the user in natural dialogue; the runtime executes the tools you plan, one by one, and shows the user a progress card for each. For a multi-step request plan all the steps and carry them through without asking permission for each. Only ask a clarifying question when something essential is truly ambiguous; otherwise choose sensible defaults (e.g. a TikTok ad → create_project mode ad, format tiktok, 9:16; usual order: create_project → brainstorm → use_idea → write_script → extract_assets → generate_asset_images → build_storyboard → generate_frames → voiceover → render_video). For quick facts use web_search; to click around websites/YouTube on your computer use research; for YouTube titles/SEO/competitor analysis use youtube_intel. Never invent tool results.
 
@@ -148,44 +583,160 @@ const STOP = /^\s*(stop|cancel|abort|halt|enough)\b/i;
 export function interrupt(c: Conv, msg: string) {
   c.interrupts.push(msg);
   const s = c.researchId ? getSession(c.researchId) : undefined;
-  if (STOP.test(msg)) { c.abort = true; if (s && (s.status === "running" || s.status === "paused")) { s.stop = true; s.pause = false; } return "Stopping now — I'll wrap up with what I have."; }
-  if (s && (s.status === "running" || s.status === "paused")) { (s.inbox ||= []).push(msg); return "Got it — I'm steering the desktop agent with that now."; }
+  if (STOP.test(msg)) {
+    c.abort = true;
+    if (s && (s.status === "running" || s.status === "paused")) {
+      s.stop = true;
+      s.pause = false;
+    }
+    return "Stopping now — I'll wrap up with what I have.";
+  }
+  if (s && (s.status === "running" || s.status === "paused")) {
+    (s.inbox ||= []).push(msg);
+    return "Got it — I'm steering the desktop agent with that now.";
+  }
   return "Noted — I'll factor that in after the current step.";
 }
 
-export function agentStream(o: { convId?: string; message: string; projectId?: string; autoResearch?: boolean; ownerId?: string; persona?: Persona; history?: { role: "user" | "assistant"; content: string }[] }): { conv: Conv; stream: ReadableStream<Uint8Array> } {
+export function agentStream(o: {
+  convId?: string;
+  message: string;
+  projectId?: string;
+  autoResearch?: boolean;
+  ownerId?: string;
+  persona?: Persona;
+  history?: { role: "user" | "assistant"; content: string }[];
+}): { conv: Conv; stream: ReadableStream<Uint8Array> } {
   let c = o.convId ? convs.get(o.convId) : undefined;
   if (c && o.ownerId && c.ownerId && c.ownerId !== o.ownerId && o.ownerId !== "admin") c = undefined; // never resume someone else's conversation
-  if (!c) { c = { id: o.convId && !convs.has(o.convId) ? o.convId : nanoid(10), ownerId: o.ownerId, turns: (o.history || []).map((h) => ({ ...h, at: new Date().toISOString() })), busy: false, interrupts: [], abort: false, lastIdeas: [] }; convs.set(c.id, c); }
-  if (o.persona) { c.persona = o.persona; if (!c.projectId && o.persona.projectId) { const lp = db.getProject(o.persona.projectId); if (lp && owns(c, lp)) c.projectId = lp.id; } }
+  if (!c) {
+    c = {
+      id: o.convId && !convs.has(o.convId) ? o.convId : nanoid(10),
+      ownerId: o.ownerId,
+      turns: (o.history || []).map((h) => ({ ...h, at: new Date().toISOString() })),
+      busy: false,
+      interrupts: [],
+      abort: false,
+      lastIdeas: [],
+    };
+    convs.set(c.id, c);
+  }
+  if (o.persona) {
+    c.persona = o.persona;
+    if (!c.projectId && o.persona.projectId) {
+      const lp = db.getProject(o.persona.projectId);
+      if (lp && owns(c, lp)) c.projectId = lp.id;
+    }
+  }
   const op = o.projectId ? db.getProject(o.projectId) : undefined;
   if (op && owns(c, op)) c.projectId = op.id;
-  const conv = c; const enc = new TextEncoder();
+  const conv = c;
+  const enc = new TextEncoder();
   const now = () => new Date().toISOString();
   if (conv.busy) {
     const reply = interrupt(conv, o.message);
     conv.turns.push({ role: "user", content: o.message, at: now() }, { role: "assistant", content: reply, at: now() });
-    return { conv, stream: new ReadableStream({ start(ctrl) { ctrl.enqueue(enc.encode(JSON.stringify({ type: "conv", id: conv.id }) + "\n" + JSON.stringify({ type: "delta", text: reply }) + "\n" + JSON.stringify({ type: "done", interrupt: true }) + "\n")); ctrl.close(); } }) };
+    return {
+      conv,
+      stream: new ReadableStream({
+        start(ctrl) {
+          ctrl.enqueue(
+            enc.encode(
+              JSON.stringify({ type: "conv", id: conv.id }) +
+                "\n" +
+                JSON.stringify({ type: "delta", text: reply }) +
+                "\n" +
+                JSON.stringify({ type: "done", interrupt: true }) +
+                "\n",
+            ),
+          );
+          ctrl.close();
+        },
+      }),
+    };
   }
-  conv.busy = true; conv.abort = false; conv.interrupts = [];
+  conv.busy = true;
+  conv.abort = false;
+  conv.interrupts = [];
   // fold finished auto-research summaries into the conversation so ideas build on them
-  for (const rid of conv.autoIds || []) { const rs = getSession(rid); if (rs && rs.status !== "running" && rs.status !== "paused") { if (rs.notes) conv.turns.push({ role: "assistant", content: `(Research from my computer)\n${rs.notes.slice(0, 3500)}`, at: now() }); conv.autoIds = conv.autoIds!.filter((x) => x !== rid); } }
+  for (const rid of conv.autoIds || []) {
+    const rs = getSession(rid);
+    if (rs && rs.status !== "running" && rs.status !== "paused") {
+      if (rs.notes) conv.turns.push({ role: "assistant", content: `(Research from my computer)\n${rs.notes.slice(0, 3500)}`, at: now() });
+      conv.autoIds = conv.autoIds!.filter((x) => x !== rid);
+    }
+  }
   conv.turns.push({ role: "user", content: o.message, at: now() });
   const stream = new ReadableStream<Uint8Array>({
     async start(ctrl) {
-      const emit = (x: unknown) => { try { ctrl.enqueue(enc.encode(JSON.stringify(x) + "\n")); } catch { /* client gone */ } };
+      const emit = (x: unknown) => {
+        try {
+          ctrl.enqueue(enc.encode(JSON.stringify(x) + "\n"));
+        } catch {
+          /* client gone */
+        }
+      };
       emit({ type: "conv", id: conv.id, projectId: conv.projectId });
       const pj = conv.projectId ? db.getProject(conv.projectId) : undefined;
-      const auto = (o.autoResearch ? maybeAutoResearch({ message: o.message, ownerId: conv.ownerId, projectId: conv.projectId, scope: conv.projectId ? "p:" + conv.projectId : "c:" + conv.id, context: pj ? `${pj.mode} · ${pj.title}` : "" }).then((r) => { if (r) { (conv.autoIds ||= []).push(r.id); emit({ type: "research", ...r }); } return r; }) : Promise.resolve(null)).catch(() => null);
+      const auto = (
+        o.autoResearch
+          ? maybeAutoResearch({
+              message: o.message,
+              ownerId: conv.ownerId,
+              projectId: conv.projectId,
+              scope: conv.projectId ? "p:" + conv.projectId : "c:" + conv.id,
+              context: pj ? `${pj.mode} · ${pj.title}` : "",
+            }).then((r) => {
+              if (r) {
+                (conv.autoIds ||= []).push(r.id);
+                emit({ type: "research", ...r });
+              }
+              return r;
+            })
+          : Promise.resolve(null)
+      ).catch(() => null);
       try {
-        if (!llmLive()) { const t = "I'm in demo mode — add a Meta key (or an OpenAI-compatible fallback like xAI) in Admin → AI brain and I'll be able to plan and run studio tasks for you."; emit({ type: "delta", text: t }); conv.turns.push({ role: "assistant", content: t, at: now() }); return; }
-        const hist = (): Msg[] => conv.turns.slice(-24).map((t: Turn): Msg => t.role === "tool" ? { role: "user", content: `TOOL RESULT ${t.tool} (${t.ok ? "ok" : "error"}):\n${t.content}` } : { role: t.role, content: t.content });
+        if (!llmLive()) {
+          const t =
+            "I'm in demo mode — add a Meta key (or an OpenAI-compatible fallback like xAI) in Admin → AI brain and I'll be able to plan and run studio tasks for you.";
+          emit({ type: "delta", text: t });
+          conv.turns.push({ role: "assistant", content: t, at: now() });
+          return;
+        }
+        const hist = (): Msg[] =>
+          conv.turns
+            .slice(-24)
+            .map((t: Turn): Msg =>
+              t.role === "tool"
+                ? { role: "user", content: `TOOL RESULT ${t.tool} (${t.ok ? "ok" : "error"}):\n${t.content}` }
+                : { role: t.role, content: t.content },
+            );
         const say = async (instruction: string) => {
-          const meta: { provider?: string; model?: string } = {}; let full = ""; emit({ type: "thinking" });
-          for await (const d of chatStream([{ role: "system", content: system(conv) }, ...hist(), { role: "user", content: `[runtime instruction, not from the user] ${instruction} Never describe a step as done unless a TOOL RESULT shows it; no bracketed placeholders like [Writing Script]. Keep it under 120 words.` }], { temperature: 0.5, agent: true }, meta)) {
+          const meta: { provider?: string; model?: string } = {};
+          let full = "";
+          emit({ type: "thinking" });
+          for await (const d of chatStream(
+            [
+              { role: "system", content: system(conv) },
+              ...hist(),
+              {
+                role: "user",
+                content: `[runtime instruction, not from the user] ${instruction} Never describe a step as done unless a TOOL RESULT shows it; no bracketed placeholders like [Writing Script]. Keep it under 120 words.`,
+              },
+            ],
+            { temperature: 0.5, agent: true },
+            meta,
+          )) {
             if (!full) emit({ type: "provider", provider: meta.provider, model: meta.model });
-            const cut = (full + d).search(/\n?\s*(CALL\s*\{|```|\n\s*\[)/); if (cut >= 0) { const rest = (full + d).slice(full.length, cut); if (rest) emit({ type: "delta", text: rest }); full = (full + d).slice(0, cut); break; }
-            full += d; emit({ type: "delta", text: d });
+            const cut = (full + d).search(/\n?\s*(CALL\s*\{|```|\n\s*\[)/);
+            if (cut >= 0) {
+              const rest = (full + d).slice(full.length, cut);
+              if (rest) emit({ type: "delta", text: rest });
+              full = (full + d).slice(0, cut);
+              break;
+            }
+            full += d;
+            emit({ type: "delta", text: d });
             if (full.length > 1400) break;
           }
           conv.turns.push({ role: "assistant", content: full.trim(), at: now() });
@@ -195,55 +746,157 @@ export function agentStream(o: { convId?: string; message: string; projectId?: s
         const plan = async (): Promise<Step[]> => {
           emit({ type: "status", text: "Planning…" });
           try {
-            const ask = 'PLANNER: output ONLY JSON (no prose): {"plan":[{"tool":"<tool name>","args":{...}}]} — the ordered tool calls still needed to fully satisfy the user\'s latest request given CURRENT STATE and the results so far. Use {"plan":[]} if the request is just a question/chat, is already done, or you are waiting for the user to answer a question. Fill args concretely (titles, prompts, goals) from the conversation.';
-            const r = await chatP([{ role: "system", content: system(conv) }, ...hist(), { role: "user", content: ask }], { json: true, temperature: 0.1, agent: true });
+            const ask =
+              'PLANNER: output ONLY JSON (no prose): {"plan":[{"tool":"<tool name>","args":{...}}]} — the ordered tool calls still needed to fully satisfy the user\'s latest request given CURRENT STATE and the results so far. Use {"plan":[]} if the request is just a question/chat, is already done, or you are waiting for the user to answer a question. Fill args concretely (titles, prompts, goals) from the conversation.';
+            const r = await chatP([{ role: "system", content: system(conv) }, ...hist(), { role: "user", content: ask }], {
+              json: true,
+              temperature: 0.1,
+              agent: true,
+            });
             if (process.env.AGENT_DEBUG) console.log("PLAN", r.text);
             let j: { plan?: (Step | string)[] };
-            try { j = parseJson(r.text); } catch { j = { plan: [...r.text.matchAll(new RegExp(`\\b(${Object.keys(TOOLS).join("|")})\\b`, "g"))].map((m) => m[1]).filter((t, i, a) => a.indexOf(t) === i) }; }
-            return (j.plan || []).map((x) => typeof x === "string" ? { tool: x } : { ...x, tool: x.tool || (x as { name?: string }).name || "" }).filter((x) => x && TOOLS[x.tool]).slice(0, 12);
-          } catch (e) { if (process.env.AGENT_DEBUG) console.log("PLANERR", e); return []; }
+            try {
+              j = parseJson(r.text);
+            } catch {
+              j = {
+                plan: [...r.text.matchAll(new RegExp(`\\b(${Object.keys(TOOLS).join("|")})\\b`, "g"))].map((m) => m[1]).filter((t, i, a) => a.indexOf(t) === i),
+              };
+            }
+            return (j.plan || [])
+              .map((x) => (typeof x === "string" ? { tool: x } : { ...x, tool: x.tool || (x as { name?: string }).name || "" }))
+              .filter((x) => x && TOOLS[x.tool])
+              .slice(0, 12);
+          } catch (e) {
+            if (process.env.AGENT_DEBUG) console.log("PLANERR", e);
+            return [];
+          }
         };
         const fill = async (st: Step) => {
-          const t = TOOLS[st.tool]; const args = { ...(st.args || {}) };
+          const t = TOOLS[st.tool];
+          const args = { ...(st.args || {}) };
           if (!(t.req || []).some((k) => args[k] === undefined || args[k] === "")) return args;
           try {
-            const r = await chatP([{ role: "system", content: `Fill the arguments for tool ${st.tool} ${t.desc}. Base them on the user's request and the conversation. Output ONLY the JSON args object.` }, { role: "user", content: `Conversation:\n${conv.turns.filter((x) => x.role !== "tool").slice(-8).map((x) => `${x.role}: ${x.content.slice(0, 600)}`).join("\n")}\n\nState: ${state(conv.projectId ? db.getProject(conv.projectId) : undefined)}\nPartial args: ${JSON.stringify(args)}` }], { json: true, temperature: 0.1 });
-            return { ...parseJson<Record<string, unknown>>(r.text), ...Object.fromEntries(Object.entries(args).filter(([, v]) => v !== "" && v !== undefined)) };
-          } catch { return args; }
+            const r = await chatP(
+              [
+                {
+                  role: "system",
+                  content: `Fill the arguments for tool ${st.tool} ${t.desc}. Base them on the user's request and the conversation. Output ONLY the JSON args object.`,
+                },
+                {
+                  role: "user",
+                  content: `Conversation:\n${conv.turns
+                    .filter((x) => x.role !== "tool")
+                    .slice(-8)
+                    .map((x) => `${x.role}: ${x.content.slice(0, 600)}`)
+                    .join("\n")}\n\nState: ${state(conv.projectId ? db.getProject(conv.projectId) : undefined)}\nPartial args: ${JSON.stringify(args)}`,
+                },
+              ],
+              { json: true, temperature: 0.1 },
+            );
+            return {
+              ...parseJson<Record<string, unknown>>(r.text),
+              ...Object.fromEntries(Object.entries(args).filter(([, v]) => v !== "" && v !== undefined)),
+            };
+          } catch {
+            return args;
+          }
         };
-        await say("Reply to the user's latest message in natural, friendly language. If they asked you to make or do something, briefly acknowledge and outline the steps you will take (1–3 short sentences) and do NOT state any results yet — the tools run automatically right after you, so never ask for confirmation or say ready?. If it's a question you can answer from the conversation and tool results, answer it fully. If something essential is truly missing, ask ONE short clarifying question. No JSON, no CALL lines.");
+        await say(
+          "Reply to the user's latest message in natural, friendly language. If they asked you to make or do something, briefly acknowledge and outline the steps you will take (1–3 short sentences) and do NOT state any results yet — the tools run automatically right after you, so never ask for confirmation or say ready?. If it's a question you can answer from the conversation and tool results, answer it fully. If something essential is truly missing, ask ONE short clarifying question. No JSON, no CALL lines.",
+        );
         const last = conv.turns[conv.turns.length - 1]?.content || "";
-        const isQ = /\?\s*$/.test(o.message) && /^\s*(which|what|how|why|who|when|where|did|does|do|is|are|was|were|can you tell|tell me|explain|summari[sz]e)\b/i.test(o.message) && !/\b(research|browse|watch|search|look up|find out|check|trending|latest|right now|youtube|desktop)\b/i.test(o.message);
+        const isQ =
+          /\?\s*$/.test(o.message) &&
+          /^\s*(which|what|how|why|who|when|where|did|does|do|is|are|was|were|can you tell|tell me|explain|summari[sz]e)\b/i.test(o.message) &&
+          !/\b(research|browse|watch|search|look up|find out|check|trending|latest|right now|youtube|desktop)\b/i.test(o.message);
         let steps = isQ ? [] : /\?\s*$/.test(last) && last.length < 300 && !/\b(I'll|I will|let me|let's)\b/i.test(last) ? [] : await plan();
         let ran = 0;
         if (steps.length) emit({ type: "plan", steps: steps.map((x) => x.tool) });
         while (steps.length && ran < 14 && !conv.abort) {
-          const st = steps.shift()!; const tool = TOOLS[st.tool];
-          if (conv.persona?.approval === "key" && KEY_STEPS.has(st.tool) && !APPROVED.test(o.message) && !conv.turns.some((t) => t.role === "tool" && t.tool === st.tool && t.ok)) {
+          const st = steps.shift()!;
+          const tool = TOOLS[st.tool];
+          if (
+            conv.persona?.approval === "key" &&
+            KEY_STEPS.has(st.tool) &&
+            !APPROVED.test(o.message) &&
+            !conv.turns.some((t) => t.role === "tool" && t.tool === st.tool && t.ok)
+          ) {
             emit({ type: "approval", tool: st.tool });
             const q = `Ready for the next step: ${st.tool.replace(/_/g, " ")}. Reply “approve” to continue, or tell me what to change.`;
-            emit({ type: "delta", text: q }); emit({ type: "turn_end" }); conv.turns.push({ role: "assistant", content: q, at: now() }); steps = []; ran = 0; break;
+            emit({ type: "delta", text: q });
+            emit({ type: "turn_end" });
+            conv.turns.push({ role: "assistant", content: q, at: now() });
+            steps = [];
+            ran = 0;
+            break;
           }
-          const tid = nanoid(6); emit({ type: "tool_start", id: tid, name: st.tool, args: st.args || {} });
-          const args = await fill(st); emit({ type: "tool_args", id: tid, args });
-          let res: string, ok = true;
-          try { res = await tool.run(conv, args, emit); } catch (e) { res = (e as Error).message.slice(0, 400); ok = false; }
+          const tid = nanoid(6);
+          emit({ type: "tool_start", id: tid, name: st.tool, args: st.args || {} });
+          const args = await fill(st);
+          emit({ type: "tool_args", id: tid, args });
+          let res: string,
+            ok = true;
+          try {
+            res = await tool.run(conv, args, emit);
+          } catch (e) {
+            res = (e as Error).message.slice(0, 400);
+            ok = false;
+          }
           emit({ type: "tool_end", id: tid, name: st.tool, ok, summary: res.slice(0, 600) });
-          conv.turns.push({ role: "assistant", content: `CALL ${JSON.stringify({ tool: st.tool, args })}`, at: now() }, { role: "tool", tool: st.tool, ok, content: res.slice(0, 3500), at: now() });
+          conv.turns.push(
+            { role: "assistant", content: `CALL ${JSON.stringify({ tool: st.tool, args })}`, at: now() },
+            { role: "tool", tool: st.tool, ok, content: res.slice(0, 3500), at: now() },
+          );
           ran++;
           const said = conv.interrupts.splice(0);
-          if (said.length) { for (const u of said) conv.turns.push({ role: "user", content: `(said while you were working) ${u}`, at: now() }); if (!conv.abort) { await say("The user just said something while you were working. Respond briefly and naturally, saying how you'll adjust. No JSON."); steps = await plan(); } }
-          else if (!ok && steps.length) { steps = await plan(); }
+          if (said.length) {
+            for (const u of said) conv.turns.push({ role: "user", content: `(said while you were working) ${u}`, at: now() });
+            if (!conv.abort) {
+              await say("The user just said something while you were working. Respond briefly and naturally, saying how you'll adjust. No JSON.");
+              steps = await plan();
+            }
+          } else if (!ok && steps.length) {
+            steps = await plan();
+          }
           if (!steps.length && !conv.abort && ran < 14 && !isQ) {
             const req = [...conv.turns].reverse().find((t) => t.role === "user" && !t.content.startsWith("(said"))?.content || "";
-            const tried = conv.turns.slice(-30).filter((t) => t.role === "tool" && !t.ok).map((t) => t.tool!);
+            const tried = conv.turns
+              .slice(-30)
+              .filter((t) => t.role === "tool" && !t.ok)
+              .map((t) => t.tool!);
             const nx = nextStage(conv.projectId ? db.getProject(conv.projectId) : undefined, req, tried);
-            if (nx) { steps = [{ tool: nx, args: nx === "write_script" ? { instruction: req } : {} }]; continue; } const more = (await plan()).filter((x) => !conv.turns.some((t) => t.role === "tool" && t.ok && t.tool === x.tool && !["edit_shot", "fix_continuity", "edit_video"].includes(x.tool))); if (more.length) { steps = more; emit({ type: "plan", steps: steps.map((x) => x.tool) }); } }
+            if (nx) {
+              steps = [{ tool: nx, args: nx === "write_script" ? { instruction: req } : {} }];
+              continue;
+            }
+            const more = (await plan()).filter(
+              (x) => !conv.turns.some((t) => t.role === "tool" && t.ok && t.tool === x.tool && !["edit_shot", "fix_continuity", "edit_video"].includes(x.tool)),
+            );
+            if (more.length) {
+              steps = more;
+              emit({ type: "plan", steps: steps.map((x) => x.tool) });
+            }
+          }
         }
-        if (ran) await say(conv.abort ? "You were stopped by the user. Summarise briefly what was done and what's left. No JSON." : "All steps are done. Give the user a short conversational summary of what you did and what you found/made (cite concrete results), and suggest a next step. No JSON, no CALL lines.");
+        if (ran)
+          await say(
+            conv.abort
+              ? "You were stopped by the user. Summarise briefly what was done and what's left. No JSON."
+              : "All steps are done. Give the user a short conversational summary of what you did and what you found/made (cite concrete results), and suggest a next step. No JSON, no CALL lines.",
+          );
         if (conv.abort) emit({ type: "status", text: "Stopped." });
-      } catch (e) { emit({ type: "error", error: (e as Error).message.slice(0, 500) }); }
-      finally { await Promise.race([auto, new Promise((r) => setTimeout(r, 8000))]); conv.busy = false; emit({ type: "done", projectId: conv.projectId }); try { ctrl.close(); } catch { /* */ } }
+      } catch (e) {
+        emit({ type: "error", error: (e as Error).message.slice(0, 500) });
+      } finally {
+        await Promise.race([auto, new Promise((r) => setTimeout(r, 8000))]);
+        conv.busy = false;
+        emit({ type: "done", projectId: conv.projectId });
+        try {
+          ctrl.close();
+        } catch {
+          /* */
+        }
+      }
     },
   });
   return { conv, stream };

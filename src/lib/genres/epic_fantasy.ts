@@ -1,7 +1,11 @@
 import type { GenreSkill } from "./types";
 
 export const epicFantasy: GenreSkill = {
-  id: "epic_fantasy", version: "1.0.0", label: "Epic fantasy", short: "Medieval kingdoms, political intrigue and grand battles", music: "tension",
+  id: "epic_fantasy",
+  version: "1.0.0",
+  label: "Epic fantasy",
+  short: "Medieval kingdoms, political intrigue and grand battles",
+  music: "tension",
   structure: [
     "A world in one image: a castle, a banner, a law, a crown.",
     "The fracture: a death, a broken oath or a prophecy that threatens the throne.",
@@ -11,16 +15,47 @@ export const epicFantasy: GenreSkill = {
     "The betrayal lands; a grand battle with clear banners and lines.",
     "A new order: a crown changes hands, or a cost is paid that will haunt the next chapter.",
   ],
-  archetypes: ["Heir unsure of the right to rule", "Cunning advisor whose loyalty is unclear", "Battle-scarred knight bound by an oath", "Ambitious rival house leader", "Outsider with forbidden knowledge or magic"],
+  archetypes: [
+    "Heir unsure of the right to rule",
+    "Cunning advisor whose loyalty is unclear",
+    "Battle-scarred knight bound by an oath",
+    "Ambitious rival house leader",
+    "Outsider with forbidden knowledge or magic",
+  ],
   dialogue: {
-    rules: ["Slightly formal, timeless English — no modern slang, but no fake archaic 'thee/thou' either.", "Power is in short lines: threats and bargains are under twelve words.", "Every council line has a hidden motive; subtext over exposition.", "Invent names, houses and places; never borrow from existing fantasy works."],
-    examples: ["QUEEN ISOLDE: Kneel, Lord Varn. Or be remembered standing.", "LORD VARN: My house has knelt for forty years.", "ARDEN: The river gate will hold till dawn.", "MAESTER OREN: Everything holds until it doesn't."],
+    rules: [
+      "Slightly formal, timeless English — no modern slang, but no fake archaic 'thee/thou' either.",
+      "Power is in short lines: threats and bargains are under twelve words.",
+      "Every council line has a hidden motive; subtext over exposition.",
+      "Invent names, houses and places; never borrow from existing fantasy works.",
+    ],
+    examples: [
+      "QUEEN ISOLDE: Kneel, Lord Varn. Or be remembered standing.",
+      "LORD VARN: My house has knelt for forty years.",
+      "ARDEN: The river gate will hold till dawn.",
+      "MAESTER OREN: Everything holds until it doesn't.",
+    ],
   },
   shots: {
     lenses: "Ultra-wide 16–21mm for landscapes and castles, 35mm for halls, 75–100mm for council close-ups; occasional low angles for power.",
-    moves: "Sweeping aerial reveals of castles and armies, slow push-ins in council, steady tracking along battle lines, a high wide 'god's-eye' view of the battlefield map.",
-    coverage: ["Aerial establishing of the castle/landscape", "Council wide showing who sits where (power geography)", "Singles of each faction leader", "Insert of the symbol (crown, seal, sword, map)", "Battle map wide with banners", "Hero close-up in the chaos"],
-    framing: { establish: "aerial extreme wide, castle or valley, tiny riders", council: "symmetrical wide, throne centre, factions left and right", dialogue: "close-up, low-key candle light, eyes sharp", battle: "high wide: our banners frame-left, enemy frame-right", impact: "medium, clash of shields, 2 s", wonder: "slow crane up, awe, soft light" },
+    moves:
+      "Sweeping aerial reveals of castles and armies, slow push-ins in council, steady tracking along battle lines, a high wide 'god's-eye' view of the battlefield map.",
+    coverage: [
+      "Aerial establishing of the castle/landscape",
+      "Council wide showing who sits where (power geography)",
+      "Singles of each faction leader",
+      "Insert of the symbol (crown, seal, sword, map)",
+      "Battle map wide with banners",
+      "Hero close-up in the chaos",
+    ],
+    framing: {
+      establish: "aerial extreme wide, castle or valley, tiny riders",
+      council: "symmetrical wide, throne centre, factions left and right",
+      dialogue: "close-up, low-key candle light, eyes sharp",
+      battle: "high wide: our banners frame-left, enemy frame-right",
+      impact: "medium, clash of shields, 2 s",
+      wonder: "slow crane up, awe, soft light",
+    },
   },
   action: [
     "Battles have readable geography: two lines, two banner colours, a clear objective (gate, bridge, hill).",
@@ -41,7 +76,14 @@ export const epicFantasy: GenreSkill = {
     { risk: "Creature anatomy changes", counter: "Lock the creature with a reference sheet: limb count, wing shape, colour." },
     { risk: "Swords swapping hands or multiplying", counter: "'Arden's longsword in his right hand, exactly one sword'." },
   ],
-  checklist: ["House colours and crests constant", "Crown/seal/sword in the same hands", "Seating/power geography in council fixed", "Battle sides and banners constant", "Injuries and blood-free wounds persist", "Time of day consistent with candle vs daylight"],
+  checklist: [
+    "House colours and crests constant",
+    "Crown/seal/sword in the same hands",
+    "Seating/power geography in council fixed",
+    "Battle sides and banners constant",
+    "Injuries and blood-free wounds persist",
+    "Time of day consistent with candle vs daylight",
+  ],
   keywords: ["fantasy", "kingdom", "throne", "dragon", "medieval", "queen", "king", "castle", "knight", "sword", "magic", "empire"],
   example: `INT. THRONE HALL - NIGHT
 Candlelight. QUEEN ISOLDE (50s, silver braided hair, deep green gown, thin iron crown) sits centre. LORD VARN (40s, black beard, red-and-gold house cloak) stands frame-right before her.

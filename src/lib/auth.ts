@@ -30,7 +30,16 @@ export async function signUp(email: string, password: string, name?: string, ver
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) throw new Error("Enter a valid email address.");
   if (password.length < 8) throw new Error("Use at least 8 characters for your password.");
   if (e === adminEmail() || db.findUserByEmail(e)) throw new Error("An account with this email already exists — sign in instead.");
-  const u = { id: "u_" + nanoid(10), email: e, name: (name || "").trim().slice(0, 60) || undefined, hash: await bcrypt.hash(password, 10), role: "user" as const, createdAt: new Date().toISOString(), verified, tv: 1 };
+  const u = {
+    id: "u_" + nanoid(10),
+    email: e,
+    name: (name || "").trim().slice(0, 60) || undefined,
+    hash: await bcrypt.hash(password, 10),
+    role: "user" as const,
+    createdAt: new Date().toISOString(),
+    verified,
+    tv: 1,
+  };
   if (!(await db.insertUserUnique(u))) throw new Error("An account with this email already exists — sign in instead.");
   return { id: u.id, email: u.email, role: "user", name: u.name };
 }
@@ -38,10 +47,24 @@ export async function createSession(u: SessionUser | string) {
   const user: SessionUser = typeof u === "string" ? { id: ADMIN_ID, email: u, role: "admin" } : u;
   const days = user.role === "admin" ? 1 : 30;
   const tv = user.id === ADMIN_ID ? 0 : db.getUser(user.id)?.tv || 0;
-  const token = await new SignJWT({ sub: user.email, uid: user.id, role: user.role, name: user.name, tv }).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime(`${days}d`).sign(await sessionKey());
-  (await cookies()).set(COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.COOKIE_SECURE !== "false" && process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * days });
+  const token = await new SignJWT({ sub: user.email, uid: user.id, role: user.role, name: user.name, tv })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${days}d`)
+    .sign(await sessionKey());
+  (await cookies()).set(COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.COOKIE_SECURE !== "false" && process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * days,
+  });
 }
-export async function clearSession() { const c = await cookies(); c.delete(COOKIE); c.delete("opie_admin"); }
+export async function clearSession() {
+  const c = await cookies();
+  c.delete(COOKIE);
+  c.delete("opie_admin");
+}
 /** Signed-in user. Registered users are re-checked against the store: a deleted account, or a session older than the last
  *  password change (token version), is signed out. */
 export async function currentUser(): Promise<SessionUser | null> {
@@ -68,11 +91,18 @@ export async function consumeToken(raw: string, kind: TokRec["kind"]): Promise<s
   await db.delDoc("authtokens", t.id);
   return t.exp >= Date.now() && db.getUser(t.ownerId) ? t.ownerId : null;
 }
-export function peekToken(raw: string, kind: TokRec["kind"]) { const t = raw && raw.length <= 100 ? db.getDoc<TokRec>("authtokens", sha(raw)) : undefined; return !!t && t.kind === kind && t.exp >= Date.now(); }
-export async function purgeTokens(uid: string) { for (const t of db.listDocs<TokRec>("authtokens", uid)) await db.delDoc("authtokens", t.id); }
+export function peekToken(raw: string, kind: TokRec["kind"]) {
+  const t = raw && raw.length <= 100 ? db.getDoc<TokRec>("authtokens", sha(raw)) : undefined;
+  return !!t && t.kind === kind && t.exp >= Date.now();
+}
+export async function purgeTokens(uid: string) {
+  for (const t of db.listDocs<TokRec>("authtokens", uid)) await db.delDoc("authtokens", t.id);
+}
 export const hashPassword = (p: string) => bcrypt.hash(p, 10);
 export const comparePassword = (p: string, h: string) => bcrypt.compare(p, h);
-export async function isAdmin() { return (await currentUser())?.role === "admin"; }
+export async function isAdmin() {
+  return (await currentUser())?.role === "admin";
+}
 /** 401 if signed out, 403 if signed in without the admin role, else null. */
 export async function adminGate(): Promise<Response | null> {
   const u = await currentUser();

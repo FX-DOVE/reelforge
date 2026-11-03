@@ -2,7 +2,12 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 
 export const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
-export const FONT = process.env.FONT_FILE || ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf", "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"].find((f) => fs.existsSync(f)) || "";
+export const FONT =
+  process.env.FONT_FILE ||
+  ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf", "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"].find(
+    (f) => fs.existsSync(f),
+  ) ||
+  "";
 
 export function ffmpeg(args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -29,9 +34,19 @@ export function dt(s: string) {
   return s.replace(/\\/g, "\\\\\\\\").replace(/'/g, "\u2019").replace(/:/g, "\\:").replace(/%/g, "\\%").replace(/,/g, "\\,");
 }
 export function wrap(s: string, n: number, maxLines = 6) {
-  const words = s.split(/\s+/); const lines: string[] = []; let cur = "";
-  for (const w of words) { if ((cur + " " + w).trim().length > n) { lines.push(cur.trim()); cur = w; } else cur += " " + w; }
+  const words = s.split(/\s+/);
+  const lines: string[] = [];
+  let cur = "";
+  for (const w of words) {
+    if ((cur + " " + w).trim().length > n) {
+      lines.push(cur.trim());
+      cur = w;
+    } else cur += " " + w;
+  }
   if (cur.trim()) lines.push(cur.trim());
-  if (lines.length > maxLines) { lines.length = maxLines; lines[maxLines - 1] += "…"; }
+  if (lines.length > maxLines) {
+    lines.length = maxLines;
+    lines[maxLines - 1] += "…";
+  }
   return lines;
 }

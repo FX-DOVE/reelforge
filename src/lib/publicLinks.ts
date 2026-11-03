@@ -1,1 +1,7 @@
-export const PUBLIC_LINKS = [{ href: "/#features", label: "Features" }, { href: "/#how", label: "How it works" }, { href: "/pricing", label: "Pricing" }, { href: "/about", label: "About" }, { href: "/faq", label: "FAQ" }];
+export const PUBLIC_LINKS = [
+  { href: "/#features", label: "Features" },
+  { href: "/#how", label: "How it works" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/about", label: "About" },
+  { href: "/faq", label: "FAQ" },
+];

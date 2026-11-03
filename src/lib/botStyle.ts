@@ -14,17 +14,32 @@ export const BOT_PALETTES = [
 ] as const;
 export type BotStyle = { shape: (typeof BOT_SHAPES)[number]; palette: number; eyes: (typeof BOT_EYES)[number]; acc: (typeof BOT_ACC)[number] };
 export const DEFAULT_BOT: BotStyle = { shape: "round", palette: 0, eyes: "glow", acc: "none" };
-const pick = <T,>(a: readonly T[]) => a[Math.floor(Math.random() * a.length)];
-export const randomBot = (): BotStyle => ({ shape: pick(BOT_SHAPES), palette: Math.floor(Math.random() * BOT_PALETTES.length), eyes: pick(BOT_EYES), acc: pick(BOT_ACC) });
+const pick = <T>(a: readonly T[]) => a[Math.floor(Math.random() * a.length)];
+export const randomBot = (): BotStyle => ({
+  shape: pick(BOT_SHAPES),
+  palette: Math.floor(Math.random() * BOT_PALETTES.length),
+  eyes: pick(BOT_EYES),
+  acc: pick(BOT_ACC),
+});
 export function cleanBot(b: unknown): BotStyle | undefined {
-  if (!b || typeof b !== "object") return undefined; const o = b as Record<string, unknown>;
-  const shape = BOT_SHAPES.find((x) => x === o.shape), eyes = BOT_EYES.find((x) => x === o.eyes), acc = BOT_ACC.find((x) => x === o.acc);
+  if (!b || typeof b !== "object") return undefined;
+  const o = b as Record<string, unknown>;
+  const shape = BOT_SHAPES.find((x) => x === o.shape),
+    eyes = BOT_EYES.find((x) => x === o.eyes),
+    acc = BOT_ACC.find((x) => x === o.acc);
   const palette = Number.isInteger(o.palette) && (o.palette as number) >= 0 && (o.palette as number) < BOT_PALETTES.length ? (o.palette as number) : undefined;
   return shape && eyes && acc && palette !== undefined ? { shape, eyes, acc, palette } : undefined;
 }
 /** Stable look for older agents that never chose one (derived from id). */
 export function botFor(id: string | undefined, b?: BotStyle): BotStyle {
-  if (b) return b; if (!id) return DEFAULT_BOT;
-  let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return { shape: BOT_SHAPES[h % 4], palette: (h >> 3) % BOT_PALETTES.length, eyes: BOT_EYES[(h >> 6) % BOT_EYES.length], acc: BOT_ACC[(h >> 9) % BOT_ACC.length] };
+  if (b) return b;
+  if (!id) return DEFAULT_BOT;
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return {
+    shape: BOT_SHAPES[h % 4],
+    palette: (h >> 3) % BOT_PALETTES.length,
+    eyes: BOT_EYES[(h >> 6) % BOT_EYES.length],
+    acc: BOT_ACC[(h >> 9) % BOT_ACC.length],
+  };
 }
