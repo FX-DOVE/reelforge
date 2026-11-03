@@ -14,6 +14,17 @@ export const metadata: Metadata = {
   title: { default: "ReelForge Studio — idea to finished film", template: "%s · ReelForge Studio" },
   description: "ReelForge Studio is an AI film studio: brainstorm, script, cast, storyboard, keep continuity, voice and cut — in one place.",
   applicationName: "ReelForge Studio",
+  // Tab / home-screen icons: the 3D Reel bot (filenames versioned to bust old caches)
+  icons: {
+    icon: [
+      { url: "/favicon.ico?v=2", sizes: "any" },
+      { url: "/icons/reel-v2-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/reel-v2-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/reel-v2-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/reel-v2-apple-180.png", sizes: "180x180" }],
+  },
+  manifest: "/manifest.webmanifest?v=2",
   openGraph: { title: "ReelForge Studio", description: "Idea to finished film in one AI studio.", images: ["/brand/hero-poster.jpg"] },
 };
 export const viewport: Viewport = {

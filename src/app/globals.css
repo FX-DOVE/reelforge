@@ -55,7 +55,8 @@ body { -webkit-font-smoothing: antialiased; }
 .glow { background: radial-gradient(50% 45% at 50% 0%, rgba(0,113,227,.07), transparent 70%); }
 .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
 
-html, body { overflow-x: hidden; }
+/* clip (not hidden) so body is not a scroll container — keeps position: sticky panels working */
+html, body { overflow-x: clip; }
 input, textarea, select { font-size: max(16px, 1em); }
 @media (min-width: 640px) { input, textarea, select { font-size: inherit; } }
 .font-display { font-family: var(--font-display); font-weight: 400; letter-spacing: -0.01em; }
