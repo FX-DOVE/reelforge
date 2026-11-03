@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Mascot } from "@/components/Mascot";
 import { ArrowUpRight } from "lucide-react";
 import { PublicNav, PublicFooter, CtaBand } from "@/components/PublicSite";
 import { Showcase } from "@/components/landing/Showcase";
@@ -119,7 +120,7 @@ export default function Landing() {
         </Reveal>
         <FloatCard from="right" className="mx-auto w-full max-w-md">
           <div className="flex items-center gap-3">
-            <img src="/brand/reel.webp" alt="" className="h-11 w-11 rounded-full" />
+            <Mascot size={44} still /> {/* same 3D bot the app uses */}
             <div>
               <p className="text-sm font-semibold">Reel</p>
               <p className="text-xs text-emerald-400">online</p>

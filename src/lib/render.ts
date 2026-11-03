@@ -605,6 +605,7 @@ export async function renderProject(projectId: string) {
       progress: 100,
       message: `Rendered ${t.toFixed(1)}s · voice ${speech.toFixed(1)}s (${Math.round((speech / Math.max(t, 0.1)) * 100)}%)`,
       url: mediaUrl(final),
+      durationSec: Math.round(t * 10) / 10, // real film length, shown on the dashboard cards
       review,
       warnings: warnings.length ? warnings : undefined,
     });

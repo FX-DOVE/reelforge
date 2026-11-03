@@ -134,6 +134,8 @@ export interface RenderJob {
   progress: number;
   message: string;
   url?: string;
+  /** length of the rendered final film in seconds (set when the render finishes) */
+  durationSec?: number;
   updatedAt: string;
   review?: string;
   warnings?: string[];

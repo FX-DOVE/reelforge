@@ -22,6 +22,7 @@ type Row = {
   cover?: string;
   updatedAt: string;
   shots: number;
+  durationSec?: number;
   rendered: boolean;
   rendering?: boolean;
   ownerId?: string;
@@ -29,6 +30,10 @@ type Row = {
 const MODE_LABEL: Record<string, string> = { drama: "Drama", documentary: "Documentary", ad: "Product Ad" };
 const FORMAT_LABEL: Record<string, string> = { yt_shorts: "YouTube Shorts", tiktok: "TikTok", fb_reels: "Facebook Reels", yt_long: "YouTube Video" };
 const ratio = (a: string) => a.replace(":", "/");
+/** Seconds → m:ss for the card's length badge. */
+const mmss = (sec: number) => `${Math.floor(Math.round(sec) / 60)}:${String(Math.round(sec) % 60).padStart(2, "0")}`;
+/** Human label for the frame shape, so "9:16" is never mistaken for a time. */
+const shapeLabel = (a: string) => (a === "9:16" ? "Vertical" : a === "16:9" ? "Wide" : a === "1:1" ? "Square" : a);
 
 export function ProjectsHome() {
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -109,12 +114,14 @@ export function ProjectsHome() {
                   <span className="badge bg-black/50 text-white/90">{MODE_LABEL[r.mode]}</span>
                   {r.rendered && <span className="badge bg-emerald-500/20 text-emerald-300">Cut ready</span>}
                 </div>
-                <span className="absolute bottom-2.5 right-2.5 badge bg-black/50 text-white/80">{r.aspect}</span>
+                {r.durationSec ? (
+                  <span className="absolute bottom-2.5 right-2.5 badge bg-black/60 font-mono tabular-nums text-white/90">{mmss(r.durationSec)}</span>
+                ) : null}
               </div>
               <div className="p-3 sm:p-4">
                 <div className="truncate font-medium">{r.title}</div>
                 <div className="mt-1 truncate text-xs text-ink-400">
-                  {FORMAT_LABEL[r.format]} · {r.style} · {r.shots} shots
+                  {FORMAT_LABEL[r.format]} · {shapeLabel(r.aspect)} · {r.style} · {r.shots} shots
                 </div>
               </div>
             </Link>
