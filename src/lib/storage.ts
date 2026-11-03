@@ -3,6 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { getConfig } from "./config";
 import { spawnSync } from "node:child_process";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { MEDIA_DIR, db } from "./db";
 
 /**
@@ -180,9 +183,8 @@ export function ensureCached(rel: string): Promise<string | null> {
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     const tmp = `${abs}.part${process.pid}`;
     try {
-      const { Readable } = await import("node:stream");
-      const { pipeline } = await import("node:stream/promises");
-      await pipeline(Readable.fromWeb(r.body as import("node:stream/web").ReadableStream), fs.createWriteStream(tmp));
+      // static imports: a bundled dynamic import("node:stream") left Readable undefined, so every R2 pull failed (blank media)
+      await pipeline(Readable.fromWeb(r.body as unknown as WebReadableStream), fs.createWriteStream(tmp));
       if (!fs.existsSync(tmp) || fs.statSync(tmp).size === 0) {
         fs.rmSync(tmp, { force: true });
         return null;
