@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Clapperboard } from "lucide-react";
 import { Spinner } from "../ui";
 
@@ -23,8 +23,21 @@ export function PromptBar({
     setV("");
     await onSubmit(t);
   };
+  // Publish this bar's live height as --prompt-h so sticky side panels can stop above it.
+  const bar = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = bar.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const ro = new ResizeObserver(() => root.style.setProperty("--prompt-h", `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--prompt-h");
+    };
+  }, []);
   return (
-    <div className="sticky bottom-0 pb-safe z-20 mt-auto border-t border-white/[0.06] bg-ink-950/85 backdrop-blur px-3 py-3 sm:px-6">
+    <div ref={bar} className="sticky bottom-0 pb-safe z-20 mt-auto border-t border-white/[0.06] bg-ink-950/85 backdrop-blur px-3 py-3 sm:px-6">
       <div className="mx-auto max-w-4xl">
         <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-ink-850 p-2 shadow-2xl shadow-black/40 focus-within:border-brand-400/50">
           {left}

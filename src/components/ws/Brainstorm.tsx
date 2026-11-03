@@ -418,7 +418,7 @@ export function Brainstorm({
 
   return (
     <aside
-      className={`${open ? "flex" : "hidden"} xl:flex min-h-[520px] w-full flex-col border-t border-white/[0.06] bg-ink-900/60 xl:sticky xl:top-0 xl:h-dvh xl:w-[420px] xl:border-l xl:border-t-0`}
+      className={`${open ? "flex" : "hidden"} xl:flex min-h-[520px] w-full flex-col border-t border-white/[0.06] bg-ink-900/60 xl:sticky xl:top-0 xl:h-[calc(100dvh-var(--prompt-h,0px))] xl:w-[420px] xl:border-l xl:border-t-0`}
     >
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] px-4 xl:pr-16">
         <MessageSquareText className="h-4 w-4 text-brand-400" />
