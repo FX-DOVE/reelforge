@@ -3,6 +3,7 @@ import { ArrowRight, Film, Image as ImageIcon, Mic, Play, Clapperboard } from "l
 import type { Project, Shot } from "@/lib/types";
 import { Spinner } from "../ui";
 import { active, ratio, shotsOf, type TabProps } from "./common";
+import { mediaSrc } from "@/lib/mediaSrc";
 import { useEffect, useState } from "react";
 
 type VP = {
@@ -35,7 +36,7 @@ export function ClipJobBadge({ sh }: { sh: Shot }) {
 
 export function VideoTab({ p, act, busy, voices, patch, next }: TabProps & { patch: (b: Partial<Project>) => void; next: () => void }) {
   const shots = shotsOf(p);
-  const [live, setLive] = useState<{ video: boolean; tts: string } | null>(null);
+  const [live, setLive] = useState<{ video: boolean; tts: string; ttsLabel?: string; sttLabel?: string } | null>(null);
   useEffect(() => {
     fetch("/api/status")
       .then((r) => r.json())
@@ -152,8 +153,8 @@ export function VideoTab({ p, act, busy, voices, patch, next }: TabProps & { pat
           <div className="panel p-5">
             <span className="label">Voiceover</span>
             <p className="text-xs text-ink-400">
-              Provider: <b className="text-white">{live?.tts === "edge" || !live ? "Microsoft Edge neural (free)" : live.tts}</b>. Characters use the voice set
-              on their asset card.
+              Provider: <b className="text-white">{live?.ttsLabel || "Meta MMS-TTS (facebook/mms-tts)"}</b>. Dialogue clarity is checked with{" "}
+              <b className="text-white">{live?.sttLabel || "Meta wav2vec2 (facebook/wav2vec2-base-960h)"}</b>. Characters use the voice shape on their asset card.
             </p>
             {p.mode !== "drama" || shots.some((s) => s.narration) ? (
               <div className="mt-3">
@@ -183,12 +184,12 @@ export function VideoTab({ p, act, busy, voices, patch, next }: TabProps & { pat
                   <span className="w-6 text-center text-xs font-semibold text-ink-400">{sh.index + 1}</span>
                   {[s, e].map((v, i) => (
                     <div key={i} className="h-16 overflow-hidden rounded-lg bg-ink-800" style={{ aspectRatio: ratio(p.aspect) }}>
-                      {v && <img src={v.url} alt="" className="h-full w-full object-cover" />}
+                      {v && <img src={mediaSrc(v.url)} alt="" className="h-full w-full object-cover" />}
                     </div>
                   ))}
                   {sh.clipUrl && (
                     <video
-                      src={sh.clipUrl}
+                      src={mediaSrc(sh.clipUrl)}
                       className="h-16 rounded-lg bg-black"
                       style={{ aspectRatio: ratio(p.aspect) }}
                       muted
@@ -213,7 +214,7 @@ export function VideoTab({ p, act, busy, voices, patch, next }: TabProps & { pat
                   )}
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
-                  {sh.audioUrl && <audio controls src={sh.audioUrl} className="h-8 w-48" />}
+                  {sh.audioUrl && <audio controls src={mediaSrc(sh.audioUrl)} className="h-8 w-48" />}
                   {(sh.dialogue || sh.narration) && (
                     <button
                       className="btn-ghost h-8"

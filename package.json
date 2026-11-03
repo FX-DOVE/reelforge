@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "tsx --test src/lib/*.test.ts"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.2",
@@ -32,6 +33,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.28",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

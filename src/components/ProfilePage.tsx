@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, LogOut, Trash2 } from "lucide-react";
 import { Spinner } from "./ui";
+import { useSession } from "./Session";
 
 type Me = { id: string; email: string; name?: string; role: string; avatar?: string | null; createdAt?: string };
 const send = (u: string, method: string, b?: unknown) =>
@@ -29,7 +30,8 @@ export function Avatar({ me, size = 40 }: { me: Pick<Me, "email" | "name" | "ava
 }
 
 export function ProfilePage() {
-  const [me, setMe] = useState<Me | null>(null);
+  const session = useSession();
+  const [me, setMe] = useState<Me | null>(session);
   const [name, setName] = useState("");
   const [msg, setMsg] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
@@ -39,15 +41,20 @@ export function ProfilePage() {
   const [confirmDel, setConfirmDel] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const load = () =>
-    fetch("/api/auth/me")
-      .then((r) => r.json())
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
+        if (!j?.user?.email) return;
         setMe(j.user);
         setName(j.user?.name || "");
       });
   useEffect(() => {
+    if (session?.email) {
+      setMe(session);
+      setName(session.name || "");
+    }
     load();
-  }, []);
+  }, [session]);
   const note = (k: string, v: string) => setMsg((m) => ({ ...m, [k]: v }));
   if (!me)
     return (

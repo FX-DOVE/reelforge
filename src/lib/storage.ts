@@ -22,7 +22,7 @@ export function r2Conf(): R2Conf | null {
   const account = getConfig("R2_ACCOUNT_ID") || "",
     key = getConfig("R2_ACCESS_KEY_ID") || "",
     secret = getConfig("R2_SECRET_ACCESS_KEY") || "";
-  const bucket = getConfig("R2_BUCKET") || "cineforge";
+  const bucket = getConfig("R2_BUCKET") || "reelden";
   const endpoint = (getConfig("R2_ENDPOINT") || (account ? `https://${account}.r2.cloudflarestorage.com` : "")).replace(/\/$/, "");
   if (!key || !secret || !endpoint) return null;
   return { account, key, secret, bucket, endpoint, publicBase: getConfig("R2_PUBLIC_URL")?.replace(/\/$/, "") || undefined };
@@ -47,6 +47,7 @@ export async function r2Req(
   type?: string,
   query: Record<string, string> = {},
   extra: Record<string, string> = {},
+  timeoutMs?: number,
 ) {
   const u = new URL(`${c.endpoint}/${c.bucket}${key ? "/" + keyPath(key) : ""}`);
   const qs = Object.entries(query)
@@ -69,7 +70,7 @@ export async function r2Req(
     method,
     body: body ? new Uint8Array(body) : undefined,
     headers: { ...extra, ...send, authorization: `AWS4-HMAC-SHA256 Credential=${c.key}/${scope}, SignedHeaders=${names.join(";")}, Signature=${sig}` },
-    signal: AbortSignal.timeout(body && body.length > 5e6 ? 600_000 : 30_000),
+    signal: AbortSignal.timeout(timeoutMs ?? (body && body.length > 5e6 ? 600_000 : 60_000)),
   });
 }
 /** Presigned GET URL (default 1 hour). */
@@ -136,25 +137,66 @@ export async function snapshotStory(pid: string): Promise<boolean> {
 }
 const g = globalThis as unknown as { __r2Up?: Set<string> };
 const uploaded = (g.__r2Up ||= new Set());
-/** URL to serve a media file from: presigned R2 URL (uploading on first use) or null → serve locally. */
+/** URL to serve a media file from: presigned R2 URL (uploading on first use) or null → serve locally. Does not throw when the file only lives in R2. */
 export async function remoteUrl(rel: string, type: string): Promise<string | null> {
   if (!r2Enabled()) return null;
   const c = r2Conf()!;
   const key = "media/" + rel;
+  const local = path.join(MEDIA_DIR, rel);
   try {
     if (!uploaded.has(key)) {
       const head = await r2Req(c, "HEAD", key);
       if (!head.ok) {
-        const r = await r2Req(c, "PUT", key, fs.readFileSync(path.join(MEDIA_DIR, rel)), type);
+        if (!fs.existsSync(local)) return null;
+        const r = await r2Req(c, "PUT", key, fs.readFileSync(local), type);
         if (!r.ok) throw new Error(`R2 upload ${r.status}`);
       }
       uploaded.add(key);
     }
     return presign(c, key);
   } catch (e) {
-    console.error("R2 fallback to local:", (e as Error).message);
+    console.error("R2 remoteUrl:", (e as Error).message);
     return null;
   }
+}
+
+const inflight = new Map<string, Promise<string | null>>();
+/**
+ * Local disk is a cache. If the file was offloaded to R2, pull it back with a header-signed GET
+ * (not a browser redirect to a presigned URL, which expires and breaks <img>).
+ */
+export function ensureCached(rel: string): Promise<string | null> {
+  const abs = path.resolve(MEDIA_DIR, rel);
+  if (abs !== MEDIA_DIR && !abs.startsWith(MEDIA_DIR + path.sep)) return Promise.resolve(null);
+  if (fs.existsSync(abs) && fs.statSync(abs).size > 0) return Promise.resolve(abs);
+  const pending = inflight.get(rel);
+  if (pending) return pending;
+  const job = (async () => {
+    if (!r2Enabled()) return null;
+    const c = r2Conf();
+    if (!c) return null;
+    const r = await r2Req(c, "GET", "media/" + rel, undefined, undefined, {}, {}, 600_000);
+    if (!r.ok || !r.body) return null;
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    const tmp = `${abs}.part${process.pid}`;
+    try {
+      const { Readable } = await import("node:stream");
+      const { pipeline } = await import("node:stream/promises");
+      await pipeline(Readable.fromWeb(r.body as import("node:stream/web").ReadableStream), fs.createWriteStream(tmp));
+      if (!fs.existsSync(tmp) || fs.statSync(tmp).size === 0) {
+        fs.rmSync(tmp, { force: true });
+        return null;
+      }
+      fs.renameSync(tmp, abs);
+      return abs;
+    } catch (e) {
+      fs.rmSync(tmp, { force: true });
+      console.error("R2 cache", rel, (e as Error).message);
+      return null;
+    }
+  })().finally(() => inflight.delete(rel));
+  inflight.set(rel, job);
+  return job;
 }
 
 /** Admin "Test connection": upload, read back, delete a tiny object. */

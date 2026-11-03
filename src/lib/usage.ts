@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { getConfig } from "./config";
+import { getConfig, metaOnly } from "./config";
 
 // Prices are NOT hardcoded facts: they come from Admin → Pricing (editable; defaults are only a starting point).
 const triple = (k: string) => {
@@ -34,6 +34,8 @@ export interface UsageRow {
   usd: number;
   pid?: string;
   step?: string;
+  /** account that triggered the call, when the request knew who was signed in */
+  uid?: string;
 }
 export interface EscalationRow {
   at: string;
@@ -50,7 +52,7 @@ const g = globalThis as unknown as {
   __rfUsage?: UsageRow[];
   __rfUsageT?: ReturnType<typeof setTimeout>;
   __rfEsc?: EscalationRow[];
-  __rfStep?: AsyncLocalStorage<{ pid: string; step: string }>;
+  __rfStep?: AsyncLocalStorage<{ pid: string; step: string; uid?: string }>;
 };
 const dir = () => process.env.DATA_DIR || path.join(process.cwd(), "data");
 const file = () => path.join(dir(), "usage.json");
@@ -75,15 +77,39 @@ function escRows(): EscalationRow[] {
   }
   return g.__rfEsc!;
 }
-const steps = (g.__rfStep ||= new AsyncLocalStorage());
+type StepStore = { pid: string; step: string; uid?: string };
+const steps = (g.__rfStep ||= new AsyncLocalStorage<StepStore>());
 /** Tag every model call inside fn with a project + pipeline step (feeds the “Built with Meta” pipeline view). */
 export function withStep<T>(pid: string, step: string, fn: () => T): T {
-  return steps.run({ pid, step }, fn);
+  return steps.run({ pid, step, uid: steps.getStore()?.uid }, fn);
 }
 export const currentStep = () => steps.getStore();
-/** Tag the rest of the current async flow (route handler / background job) with a project step. */
+export const currentUid = () => steps.getStore()?.uid;
+/** Tag the rest of the current async flow (route handler / background job) with a project step. Keeps the signed-in user if one was set. */
 export function enterStep(pid: string, step: string) {
-  steps.enterWith({ pid, step });
+  steps.enterWith({ pid, step, uid: steps.getStore()?.uid });
+}
+/** Remember who is spending Meta credits for the rest of this async flow (quota). */
+export function enterUser(uid: string) {
+  const prev = steps.getStore();
+  steps.enterWith(prev ? { ...prev, uid } : { pid: "", step: "", uid });
+}
+
+const METERED = /muse|baseten|\bsam\b|meta muse/i;
+/** Meta API calls (Muse text/image, Baseten, SAM) count toward the per-user quota. Self-hosted MMS / wav2vec2 and local ffmpeg do not. */
+export function meteredSince(uid: string, windowMs: number, owner: (pid?: string) => string | undefined) {
+  const cut = Date.now() - windowMs;
+  let n = 0;
+  for (const r of rows()) {
+    if (Date.parse(r.at) < cut) continue;
+    const who = r.uid || (r.pid ? owner(r.pid) : "");
+    if (who !== uid) continue;
+    const label = `${r.provider} ${r.model}`;
+    if (/wav2vec|mms|espeak|ffmpeg/i.test(label)) continue;
+    if (!METERED.test(label)) continue;
+    n++;
+  }
+  return n;
 }
 
 export function cost(model: string, inTok: number, cached: number, out: number, images = 0) {
@@ -119,7 +145,8 @@ export function record(task: string, provider: string, model: string, u: Record<
     out,
     ...(images ? { images } : {}),
     usd: +(usdOverride ?? cost(model, inTok, cached, out, images)).toFixed(6),
-    ...(ctx ? { pid: ctx.pid, step: ctx.step } : {}),
+    ...(ctx?.pid ? { pid: ctx.pid, step: ctx.step } : {}),
+    ...(ctx?.uid ? { uid: ctx.uid } : {}),
   };
   const all = rows();
   all.push(r);
@@ -149,9 +176,11 @@ export function anonymizeProject(pid: string) {
 export function projectTrace(pid: string) {
   return rows().filter((r) => r.pid === pid);
 }
+/** Non-Meta engines must not show up as active usage while the hackathon switch is on. */
+const NON_META_LOG = /edge|eleven|xai|grok|veo|\bltx\b|minimax|hailuo|openai|claude|omni|anthropic/i;
 export function usageReport(days = 30) {
   const since = Date.now() - days * 864e5;
-  const all = rows().filter((r) => Date.parse(r.at) >= since);
+  const all = rows().filter((r) => Date.parse(r.at) >= since && !(metaOnly() && NON_META_LOG.test(`${r.provider} ${r.model}`)));
   const agg = (k: (r: UsageRow) => string) =>
     Object.values(
       all.reduce(

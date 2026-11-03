@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/guard";
-import { createProject } from "@/lib/projects";
+import { createProject, healPlatform } from "@/lib/projects";
+import { mediaSrc } from "@/lib/mediaSrc";
 import type { Project } from "@/lib/types";
 
 /** Card length: rendered film length → sum of shot durations → planned target length (0 = unknown). */
@@ -20,6 +21,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const u = await requireUser();
   if (u instanceof Response) return u;
+  const ids = db.listProjects(u.role === "admin" ? undefined : u.id).map((p) => p.id);
+  for (const id of ids) await healPlatform(id).catch(() => undefined);
   return NextResponse.json(
     db
       .listProjects(u.role === "admin" ? undefined : u.id)
@@ -31,7 +34,7 @@ export async function GET() {
         aspect,
         style,
         outputType,
-        cover,
+        cover: cover ? mediaSrc(cover) : cover,
         updatedAt,
         shots: scenes.reduce((n, s) => n + s.shots.length, 0),
         durationSec: projectLength(render, scenes, targetSec),

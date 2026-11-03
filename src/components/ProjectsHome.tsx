@@ -8,6 +8,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Clapperboard, Film, Image as ImageIcon, Megaphone, Plus, Search, Trash2, Video } from "lucide-react";
 import { Modal, Segmented, Spinner, Logo } from "./ui";
+import { FORMAT_ASPECTS } from "@/lib/platform";
+import type { Format } from "@/lib/types";
+import { mediaSrc } from "@/lib/mediaSrc";
 import { StatusPill } from "./AppShell";
 import { DeleteProjectDialog } from "./DeleteProject";
 
@@ -103,7 +106,7 @@ export function ProjectsHome() {
             >
               <div className="relative aspect-[4/3] bg-ink-800">
                 {r.cover ? (
-                  <img src={r.cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                  <img src={mediaSrc(r.cover)} alt="" className="absolute inset-0 h-full w-full object-cover" />
                 ) : (
                   <div className="absolute inset-0 grid place-items-center text-ink-600">
                     <Clapperboard className="h-10 w-10" />
@@ -250,7 +253,7 @@ function NewProject({ open, onClose }: { open: boolean; onClose: () => void }) {
             <Segmented
               value={aspect}
               onChange={setAspect}
-              options={["9:16", "16:9", "1:1", "4:5"].map((a) => ({
+              options={FORMAT_ASPECTS[format as Format].map((a) => ({
                 value: a,
                 label: (
                   <>
@@ -296,7 +299,7 @@ function NewProject({ open, onClose }: { open: boolean; onClose: () => void }) {
           <div className="grid grid-cols-2 gap-2">
             {[
               { v: "image", l: "Image mode", d: "Many stills + motion + voice. Free, great for long-form.", i: ImageIcon },
-              { v: "video", l: "Video mode", d: "Start → end frame clips via your video engine.", i: Video },
+              { v: "video", l: "Video mode", d: "Start and end frames, with motion over the stills.", i: Video },
             ].map((o) => (
               <button
                 key={o.v}

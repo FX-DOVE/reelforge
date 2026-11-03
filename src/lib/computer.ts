@@ -181,8 +181,8 @@ async function canAck(checks: { code?: string; message?: string }[], acts: Act[]
   }
   const allow = (getConfig("CU_SAFE_DOMAINS") || "")
     .split(",")
-    .map((d) => d.trim().toLowerCase())
-    .filter(Boolean);
+    .map((d) => d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, ""))
+    .filter((d) => d && d !== "example.com" && !d.endsWith(".example.com"));
   const onAllowed = !host || /^(about:|chrome:\/\/newtab)/.test(url) || allow.some((d) => host === d || host.endsWith("." + d));
   if (!onAllowed) return false;
   // typed text: allow only URLs/search terms (no @, no long secrets-looking strings)

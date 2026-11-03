@@ -9,14 +9,25 @@ services:
     deploy:
       resources:
         limits: { cpus: "1.0", memory: 1536M }
+  # Self-hosted Meta speech: MMS-TTS (facebook/mms-tts-*) and wav2vec2 (facebook/wav2vec2-base-960h).
+  # The app reaches it as http://tts:8000 (MMS_TTS_URL). Internal only.
+  tts:
+    build: ./services/mms-tts
+    init: true
+    restart: unless-stopped
+    environment:
+      TTS_THREADS: "1"
+    mem_limit: 1400m
+    cpus: 0.4
   opie:
     build: .
     network_mode: "service:desk"  # app reaches the desktop on 127.0.0.1:7900 and Chromium CDP on 127.0.0.1:9333
     env_file: .env
     environment:
       DATA_DIR: /data
+      MMS_TTS_URL: http://tts:8000
     volumes: ["opie-data:/data"]
-    depends_on: [desk]
+    depends_on: [desk, tts]
     restart: unless-stopped
     deploy:
       resources:

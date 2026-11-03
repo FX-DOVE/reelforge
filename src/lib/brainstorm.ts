@@ -83,7 +83,7 @@ function mockReply(p: Project, message: string): string {
               ],
             },
           ];
-  return `**Demo mode** — no AI key is configured, so this is a template. Add a Meta key (or a fallback like xAI) in **Admin → AI brain** for real brainstorming.\n\nHere's a starting direction for "${topic}":\n\n\`\`\`ideas\n${JSON.stringify({ ideas })}\n\`\`\`\nWant me to push it darker, funnier, or more emotional?`;
+  return `**Demo mode** — no Meta key is configured, so this is a template. Add a Meta key in **Admin → Meta Model API** for real brainstorming.\n\nHere's a starting direction for "${topic}":\n\n\`\`\`ideas\n${JSON.stringify({ ideas })}\n\`\`\`\nWant me to push it darker, funnier, or more emotional?`;
 }
 
 /** Streams the assistant reply; persists the user + assistant turns (with provider and parsed ideas). */

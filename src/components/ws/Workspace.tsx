@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Clapperboard, Film, ScrollText, Scissors, Menu, Settings2, Users, Workflow } from "lucide-react";
 import type { Project } from "@/lib/types";
+import { FORMAT_ASPECTS, coerceAspect } from "@/lib/platform";
 import { Spinner, useToast, Modal, Segmented } from "../ui";
 import { StatusPill } from "../AppShell";
 import { DeleteProjectDialog } from "../DeleteProject";
@@ -27,18 +28,19 @@ const TABS = [
   { id: "video", label: "Video", icon: Film },
   { id: "edit", label: "Edit & Export", icon: Scissors },
 ] as const;
-type TabId = (typeof TABS)[number]["id"];
+type TabId = (typeof TABS)[number]["id"] | "pipeline";
+const TAB_IDS = new Set<string>([...TABS.map((t) => t.id), "pipeline"]);
 
 export function Workspace({ id }: { id: string }) {
   const [p, setP] = useState<Project | null>(null);
   const [missing, setMissing] = useState(false);
   const params = useSearchParams();
-  const [tab, setTab] = useState<TabId>((params.get("tab") as TabId) || "script");
+  const initialTab = params.get("tab") || "";
+  const [tab, setTab] = useState<TabId>(TAB_IDS.has(initialTab) ? (initialTab as TabId) : "script");
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [voices, setVoices] = useState<{ id: string; label: string }[]>([]);
   const [settings, setSettings] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
-  const [pipe, setPipe] = useState(false);
   const [railOpen, setRailOpen] = useState(false); // mobile drawer for the project rail
   const [contrib, setContrib] = useState(false);
   const { toast, node } = useToast();
@@ -177,7 +179,7 @@ export function Workspace({ id }: { id: string }) {
 
   const props = { p, act, busy, setP, toast, voices };
   const shotCount = p.scenes.reduce((n, s) => n + s.shots.length, 0);
-  const counts: Record<TabId, string | number> = {
+  const counts: Record<(typeof TABS)[number]["id"], string | number> = {
     script: p.script ? "" : "",
     assets: p.assets.length || "",
     storyboard: shotCount || "",
@@ -195,7 +197,8 @@ export function Workspace({ id }: { id: string }) {
         setTab={(t) => setTab(t as TabId)}
         counts={counts}
         badges={[p.mode, p.aspect, p.style, `${p.outputType} mode`]}
-        onPipeline={() => setPipe(true)}
+        pipelineOn={tab === "pipeline"}
+        onPipeline={() => setTab("pipeline")}
         onSettings={() => setSettings(true)}
         mobileOpen={railOpen}
         setMobileOpen={setRailOpen}
@@ -213,7 +216,7 @@ export function Workspace({ id }: { id: string }) {
             </Link>
             <span className="min-w-0 flex-1 truncate font-semibold">{p.title}</span>
             <StatusPill />
-            <button className="btn-ghost h-9 w-9 px-0" onClick={() => setPipe(true)} aria-label="Pipeline">
+            <button className="btn-ghost h-9 w-9 px-0" onClick={() => setTab("pipeline")} aria-label="Pipeline">
               <Workflow className="h-4 w-4 text-sky-300" />
             </button>
             <button className="btn-ghost h-9 w-9 px-0" onClick={() => setSettings(true)} aria-label="Settings">
@@ -256,20 +259,27 @@ export function Workspace({ id }: { id: string }) {
             {tab === "storyboard" && <StoryboardTab {...props} next={() => setTab("video")} />}
             {tab === "video" && <VideoTab {...props} patch={patch} next={() => setTab("edit")} />}
             {tab === "edit" && <EditTab {...props} patch={patch} />}
+            {tab === "pipeline" && (
+              <div className="flex-1 overflow-y-auto px-3 py-5 sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-3xl">
+                  <h2 className="text-xl font-semibold tracking-tight">Pipeline</h2>
+                  <p className="mt-0.5 text-sm text-ink-400">Which Meta model ran each step of this film.</p>
+                  <div className="mt-4">
+                    <PipelineView
+                      id={id}
+                      go={(t) => {
+                        setTab((TAB_IDS.has(t) ? t : "script") as TabId);
+                        load();
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </motion.div>
         </main>
       </div>
       {node}
-      <Modal open={pipe} onClose={() => setPipe(false)} title="Pipeline · Built with Meta">
-        <PipelineView
-          id={id}
-          go={(t) => {
-            setTab(t as TabId);
-            setPipe(false);
-            load();
-          }}
-        />
-      </Modal>
       <Modal open={settings} onClose={() => setSettings(false)} title="Project settings">
         <div className="space-y-5">
           <div>
@@ -292,7 +302,7 @@ export function Workspace({ id }: { id: string }) {
             <span className="label">Format</span>
             <Segmented
               value={p.format}
-              onChange={(v) => patch({ format: v })}
+              onChange={(v) => patch({ format: v, aspect: coerceAspect(v, v === "yt_long" ? "16:9" : "9:16") })}
               options={[
                 { value: "yt_shorts", label: "YouTube Shorts" },
                 { value: "tiktok", label: "TikTok" },
@@ -306,7 +316,7 @@ export function Workspace({ id }: { id: string }) {
             <Segmented
               value={p.aspect}
               onChange={(v) => patch({ aspect: v })}
-              options={["9:16", "16:9", "1:1", "4:5"].map((a) => ({ value: a as Project["aspect"], label: a }))}
+              options={FORMAT_ASPECTS[p.format].map((a) => ({ value: a, label: a }))}
             />
           </div>
           <div>

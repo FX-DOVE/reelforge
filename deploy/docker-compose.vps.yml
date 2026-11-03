@@ -11,13 +11,24 @@ services:
     restart: unless-stopped
     mem_limit: 1100m
     cpus: 0.9
+  # Self-hosted Meta speech (MMS-TTS + wav2vec2). App uses http://tts:8000. Not published on the host.
+  tts:
+    build: ./services/mms-tts
+    init: true
+    restart: unless-stopped
+    environment:
+      TTS_THREADS: "1"
+    mem_limit: 1400m
+    cpus: 0.35
   app:
     build: { context: ./app, dockerfile: Dockerfile.prebuilt }
     network_mode: "service:desk"
     env_file: .env
-    environment: { DATA_DIR: /data }
+    environment:
+      DATA_DIR: /data
+      MMS_TTS_URL: http://tts:8000
     volumes: ["app-data:/data"]
-    depends_on: [desk]
+    depends_on: [desk, tts]
     init: true
     restart: unless-stopped
     mem_limit: 700m

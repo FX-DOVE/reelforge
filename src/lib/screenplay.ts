@@ -62,3 +62,15 @@ export function parseScenes(script: string): { title: string; scenes: ParsedScen
 }
 
 export const NARRATOR_RE = /^(NARRATOR|VOICE ?OVER|V\.?O\.?|ANNOUNCER)/i;
+
+/**
+ * New scripts sometimes open with an empty TITLE line plus the editor's placeholder
+ * scene ("INT. LOCATION - DAY" / "CUT TO:") before the real title. Drop only that
+ * leading boilerplate — a real first scene is left alone.
+ */
+export function stripScriptBoilerplate(script: string): string {
+  let s = (script || "").replace(/^\uFEFF/, "").replace(/\r/g, "");
+  s = s.replace(/^(?:[ \t]*\n)*(?:TITLE:[ \t]*\n+)?(?:INT\. LOCATION - DAY[ \t]*\n+)(?:CUT TO:[ \t]*\n+)+(?=TITLE\s*:)/i, "");
+  s = s.replace(/^(?:[ \t]*\n)*TITLE:[ \t]*\n+(?=TITLE\s*:)/i, "");
+  return s.replace(/^\n+/, "");
+}

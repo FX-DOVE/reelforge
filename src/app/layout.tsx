@@ -5,6 +5,8 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { currentUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { SessionProvider, type SessionUser } from "@/components/Session";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const display = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-display-face" });
@@ -48,15 +50,26 @@ if("serviceWorker"in navigator&&location.protocol==="https:"){if(location.hostna
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // the agent, its desktop (and their polling / WebSocket) exist only for signed-in users; the public site loads none of it
-  const signedIn = !!(await currentUser());
+  const u = await currentUser();
+  const row = u ? db.getUser(u.id) : undefined;
+  const initial: SessionUser | null = u
+    ? {
+        id: u.id,
+        email: u.email,
+        name: u.name || row?.name,
+        role: u.role,
+        avatar: row?.avatar ? `/api/me/avatar?v=${row.avatar}` : null,
+        createdAt: row?.createdAt,
+      }
+    : null;
   return (
     <html lang="en" className={`${inter.variable} ${display.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: TUNNEL }} />
       </head>
       <body className="min-h-dvh font-sans">
-        {children}
-        {signedIn && (
+        <SessionProvider initial={initial}>{children}</SessionProvider>
+        {initial && (
           <>
             <FloatingAgent />
             <DesktopWidget />

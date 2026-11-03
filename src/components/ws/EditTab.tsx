@@ -5,6 +5,7 @@ import type { Project } from "@/lib/types";
 import { Spinner, Segmented } from "../ui";
 import { PromptBar } from "./PromptBar";
 import { active, ratio, shotsOf, type TabProps } from "./common";
+import { mediaSrc } from "@/lib/mediaSrc";
 
 export function EditTab({ p, act, busy, patch }: TabProps & { patch: (b: Partial<Project>) => void }) {
   const shots = shotsOf(p);
@@ -31,7 +32,7 @@ export function EditTab({ p, act, busy, patch }: TabProps & { patch: (b: Partial
             <div className="panel overflow-hidden">
               <div className={`relative mx-auto bg-black ${portrait ? "max-w-[380px]" : ""}`} style={{ aspectRatio: ratio(p.aspect) }}>
                 {r.status === "done" && r.url ? (
-                  <video key={r.url} src={r.url} controls playsInline className="absolute inset-0 h-full w-full">
+                  <video key={r.url} src={mediaSrc(r.url)} controls playsInline className="absolute inset-0 h-full w-full">
                     {r.srtUrl && !p.subtitles && <track kind="subtitles" srcLang="en" label="English" src={r.srtUrl.replace(/\.srt$/, ".vtt")} />}
                   </video>
                 ) : (
@@ -112,7 +113,7 @@ export function EditTab({ p, act, busy, patch }: TabProps & { patch: (b: Partial
                       style={{ width: Math.max(84, len * 26) }}
                       className={`relative h-24 shrink-0 overflow-hidden rounded-xl border-2 bg-ink-800 transition ${sel === sh.id ? "border-brand-400" : "border-transparent hover:border-white/20"}`}
                     >
-                      {img && <img src={img.url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-80" />}
+                      {img && <img src={mediaSrc(img.url)} alt="" className="absolute inset-0 h-full w-full object-cover opacity-80" />}
                       <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/90 px-2 py-1 text-[10px] font-semibold">
                         <span>{sh.index + 1}</span>
                         <span>{len.toFixed(1)}s</span>

@@ -3,7 +3,7 @@ import { estimateRuntime, fmtDur } from "@/lib/runtime";
 import type { Project } from "@/lib/types";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Eye, FileUp, MessageSquareText, PenLine, Send, Pencil } from "lucide-react";
-import { classify } from "@/lib/screenplay";
+import { classify, stripScriptBoilerplate } from "@/lib/screenplay";
 import { PromptBar } from "./PromptBar";
 import { Brainstorm } from "./Brainstorm";
 import { Spinner } from "../ui";
@@ -46,14 +46,14 @@ function RuntimeBadge({ p, text }: { p: Project; text: string }) {
 }
 
 export function ScriptTab({ p, act, busy, toast, setP, openBrainstorm, next }: TabProps & { openBrainstorm?: boolean; next: () => void }) {
-  const [text, setText] = useState(p.script);
+  const [text, setText] = useState(() => stripScriptBoilerplate(p.script || ""));
   const [view, setView] = useState<"write" | "read">(p.script ? "read" : "write");
   const [chatOpen, setChatOpen] = useState(openBrainstorm || !p.script);
   const [msg, setMsg] = useState("");
   const ta = useRef<HTMLTextAreaElement>(null);
   const dirty = text !== p.script;
   useEffect(() => {
-    setText(p.script);
+    setText(stripScriptBoilerplate(p.script || ""));
   }, [p.script]);
   useEffect(() => {
     if (!dirty) return;
@@ -67,7 +67,8 @@ export function ScriptTab({ p, act, busy, toast, setP, openBrainstorm, next }: T
     }, 900);
     return () => clearTimeout(t);
   }, [text, dirty, p.id, setP]);
-  const lines = useMemo(() => classify(text || ""), [text]);
+  const shown = useMemo(() => stripScriptBoilerplate(text || ""), [text]);
+  const lines = useMemo(() => classify(shown), [shown]);
   const chatEnd = useRef<HTMLDivElement>(null);
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ behavior: "smooth" });
@@ -157,12 +158,15 @@ export function ScriptTab({ p, act, busy, toast, setP, openBrainstorm, next }: T
               <article className="screenplay mx-auto rounded-2xl border border-white/[0.07] bg-[#f6f4ee] px-5 py-8 text-[13.5px] leading-relaxed text-neutral-900 shadow-2xl sm:px-14 sm:py-12">
                 {lines.map((l, i) => {
                   if (l.type === "blank") return <div key={i} className="h-3" />;
-                  if (l.type === "title")
+                  if (l.type === "title") {
+                    const title = l.text.replace(/^title\s*:\s*/i, "").trim();
+                    if (!title) return null;
                     return (
                       <h2 key={i} className="mb-6 text-center text-lg font-bold uppercase underline">
-                        {l.text.replace(/^title\s*:\s*/i, "")}
+                        {title}
                       </h2>
                     );
+                  }
                   if (l.type === "scene")
                     return (
                       <p key={i} className="mt-4 font-bold uppercase">

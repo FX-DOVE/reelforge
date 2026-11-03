@@ -4,7 +4,7 @@ import { adminGate } from "@/lib/auth";
 import { MEDIA_DIR, mediaUrl } from "@/lib/db";
 import { ffmpeg, probeDuration } from "@/lib/ffmpeg";
 import { listProviders, runProvider } from "@/lib/providers/videoProviders";
-import { getConfig, providerLive, setConfig, type Provider } from "@/lib/config";
+import { getConfig, metaOnly, providerLive, setConfig, META_ONLY_NOTE, type Provider } from "@/lib/config";
 import { usageReport } from "@/lib/usage";
 import { endpoint, generateImage } from "@/lib/providers/meta";
 import { deskShot, runComputerUse, type CuResult } from "@/lib/computer";
@@ -25,6 +25,7 @@ export async function POST(req: Request) {
   try {
     if (kind === "meta" || kind === "baseten" || kind === "fallback") {
       const w = kind as Provider;
+      if (w === "fallback" && metaOnly()) return Response.json({ ok: false, message: META_ONLY_NOTE });
       if (!providerLive(w)) return Response.json({ ok: false, message: "No key saved for this provider yet." });
       const e = endpoint(w, {});
       const r = await fetch(e.url + "/chat/completions", {
@@ -120,7 +121,7 @@ export async function POST(req: Request) {
       if (!providerLive("meta"))
         return Response.json({
           ok: false,
-          message: `Desktop OK (screenshot ${Math.round((shot.length * 0.75) / 1024)} KB in ${ms()} ms) — but no Meta key, so research uses the OmniRoute/fallback vision loop. Add a Meta key to enable Meta computer use (Muse Spark 1.3 → Muse Wonder escalation).`,
+          message: `Desktop OK (screenshot ${Math.round((shot.length * 0.75) / 1024)} KB in ${ms()} ms) — add a Meta key to enable Meta computer use (Muse Spark 1.3 → Muse Wonder).`,
           ms: ms(),
         });
       const r = await runComputerUse({
@@ -141,7 +142,7 @@ export async function POST(req: Request) {
       await deskShot(0).catch((e) => {
         throw new Error("Reel’s computer is unreachable: " + (e as Error).message);
       });
-      const task = "In the open browser, go to example.com and reply with the exact title shown on that browser tab. Do not type anything else.";
+      const task = "In the open browser, go to https://en.wikipedia.org and reply with the exact title shown on that browser tab. Do not type anything else.";
       const reset = async () => {
         const c = await deskContext().catch(() => null);
         const pg = c ? c.pages()[0] || (await c.newPage()) : null;
@@ -156,7 +157,7 @@ export async function POST(req: Request) {
           const tk = r.tokens[model] || { in: 0, out: 0, usd: 0 };
           return {
             model,
-            ok: /example domain/i.test(r.text),
+            ok: /wikipedia/i.test(r.text),
             text: r.text.slice(0, 160),
             steps: r.steps,
             seconds: +((Date.now() - t) / 1000).toFixed(1),

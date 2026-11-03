@@ -15,6 +15,9 @@ export default function LtxDocs() {
         ← Admin
       </Link>
       <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">Host LTX-Video on a GPU and connect it</h1>
+      <p className="mt-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-amber-100">
+        Not used for the hackathon. While <b>Meta models only</b> is on (the default), ReelForge will not call LTX, Runpod, Veo, or any other non-Meta video provider. This page documents the adapter for later.
+      </p>
       <p className="mt-2">
         ReelForge can send image→video (and first+last frame) jobs to your own LTX-Video server. Two options: <b className="text-white">ComfyUI</b> on a rented
         GPU (cheapest per clip, full control), or the <b className="text-white">LTX API</b> format (Lightricks’ hosted API, or any server that speaks the same{" "}

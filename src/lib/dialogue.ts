@@ -200,7 +200,7 @@ export async function transcribe(file: string, _keyterms: string[] = []): Promis
     });
     if (!r.ok) throw new Error(`STT HTTP ${r.status}`);
     const j = (await r.json()) as { text?: string };
-    record("voice", "Speech-to-text", "Meta wav2vec2-base-960h", undefined, 0, 0);
+    record("voice", "Meta", "Meta wav2vec2 (facebook/wav2vec2-base-960h)", undefined, 0, 0);
     return String(j.text || "");
   } finally {
     fs.rmSync(wav, { force: true });
